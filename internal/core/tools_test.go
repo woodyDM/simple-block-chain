@@ -47,6 +47,7 @@ func TestConcatBytes(t *testing.T) {
 	}
 }
 
+// see : https://btc.com/btc/block/123456
 func TestMerkleRoot(t *testing.T) {
 	tx := []string{
 		"5b75086dafeede555fc8f9a810d8b10df57c46f9f176ccc3dd8d2fa20edd685b",

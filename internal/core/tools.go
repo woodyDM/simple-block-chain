@@ -61,19 +61,38 @@ func ConcatBytes(bs ...[]byte) []byte {
 	}
 	return r
 }
-func MerkleRootStr(bs []string) (string, error) {
-	d := make([][]byte, 0)
-	for _, it := range bs {
-		bs, err := hex.DecodeString(it)
-		if err != nil {
-			return "", err
-		}
-		d = append(d, bs)
+
+//计算Merkle根
+// https://blog.csdn.net/shangsongwww/article/details/85339243
+// https://en.bitcoin.it/wiki/Protocol_documentation
+// Note:  Hashes in Merkle Tree displayed in the Block Explorer are of little-endian notation.
+// For some implementations and calculations,
+// the bytes need to be reversed before they are hashed, and again after the hashing operation.
+func MerkleRootStr(txIds []string) (string, error) {
+	l := len(txIds)
+	if l == 0 {
+		panic("Merkle array is 0")
 	}
-	return hex.EncodeToString(MerkleRoot(d)), nil
+	newTxIds := make([][]byte, 0)
+	for _, it := range txIds {
+		bs, _ := hex.DecodeString(it)
+		// TXIDs  反转一下数组,转化到大端
+		newTxIds = append(newTxIds, Reverse(bs))
+	}
+	root := merkleRoot(newTxIds)
+	// 结果是大端，转化为小端
+	return hex.EncodeToString(Reverse(root)), nil
 }
 
-func MerkleRoot(bs [][]byte) []byte {
+func Reverse(r []byte) []byte {
+	runes := CopyBytes(r)
+	for from, to := 0, len(runes)-1; from < to; from, to = from+1, to-1 {
+		runes[from], runes[to] = runes[to], runes[from]
+	}
+	return runes
+}
+
+func merkleRoot(bs [][]byte) []byte {
 	l := len(bs)
 	if l == 0 {
 		panic("Merkle array is 0")

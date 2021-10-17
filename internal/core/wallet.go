@@ -28,6 +28,18 @@ func (a *Wallet) PrivateKey() []byte {
 	return a.priv.D.Bytes()
 }
 
+//Version = 1 byte of 0 (zero); on the test network, this is 1 byte of 111
+//Key hash = Version concatenated with RIPEMD-160(SHA-256(public key))
+//Checksum = 1st 4 bytes of SHA-256(SHA-256(Key hash))
+//Bitcoin Address = Base58Encode(Key hash concatenated with Checksum)
+func (a *Wallet) Address() string {
+	pub := a.PublicKey()
+	mid := Sha160(Sha256(pub))
+	checkSum := Sha256(Sha256(ConcatBytes([]byte{Version}, mid)))[:LenCheckSum]
+	// 1byte version + 20 byte sha160 + 4 byte checksum
+	return Base58(ConcatBytes([]byte{Version}, mid, checkSum))
+}
+
 //使用私钥签名
 func (a *Wallet) Sign(msg []byte) ([]byte, error) {
 	r, s, err := ecdsa.Sign(rand.Reader, a.priv, msg)
@@ -60,14 +72,6 @@ func Verify(msgHash, sign, pubKey []byte) bool {
 		Y:     y,
 	}
 	return ecdsa.Verify(pub, msgHash, r, s)
-}
-
-func (a *Wallet) Address() string {
-	pub := a.PublicKey()
-	mid := Sha160(Sha256(pub))
-	checkSum := Sha256(Sha256(ConcatBytes([]byte{Version}, mid)))[:LenCheckSum]
-	// 1byte version + 20 byte sha160 + 4 byte checksum
-	return Base58(ConcatBytes([]byte{Version}, mid, checkSum))
 }
 
 func AddressToRipemd160PubKey(add string) ([]byte, error) {
