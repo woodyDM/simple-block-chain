@@ -61,4 +61,39 @@ func ConcatBytes(bs ...[]byte) []byte {
 	}
 	return r
 }
+func MerkleRootStr(bs []string) (string, error) {
+	d := make([][]byte, 0)
+	for _, it := range bs {
+		bs, err := hex.DecodeString(it)
+		if err != nil {
+			return "", err
+		}
+		d = append(d, bs)
+	}
+	return hex.EncodeToString(MerkleRoot(d)), nil
+}
 
+func MerkleRoot(bs [][]byte) []byte {
+	l := len(bs)
+	if l == 0 {
+		panic("Merkle array is 0")
+	}
+	levelOffset := 0
+	for levelSize := l; levelSize > 1; levelSize = (levelSize + 1) / 2 {
+		for left := 0; left < levelSize; left += 2 {
+			right := min(left+1, levelSize-1)
+			v := ConcatBytes(bs[left+levelOffset], bs[right+levelOffset])
+			bs = append(bs, Sha256(Sha256(v)))
+		}
+		levelOffset += levelSize
+	}
+	return bs[len(bs)-1]
+}
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	} else {
+		return a
+	}
+}

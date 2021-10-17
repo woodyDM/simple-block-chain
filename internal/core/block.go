@@ -102,7 +102,7 @@ type Output struct {
 	TxHash string
 	//output在它所在交易的下标
 	TxIndex int
-	//输出的地址 可以从脚本中得到，不参与Hash计算
+	//输出的地址 可以从脚本反推脚本的hash160，不参与Hash计算
 	Address string
 }
 
@@ -246,6 +246,7 @@ func buildP2PKHInput(txHash []byte, w *Wallet) (*Script, error) {
 
 //添加一笔已交易
 func (b *Block) AppendTx(tx *Transaction) {
+	tx.Type = NormalTx
 	b.Tx = append(b.Tx, tx)
 }
 
