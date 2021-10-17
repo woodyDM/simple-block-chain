@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,8 +9,11 @@ import (
 )
 
 const (
-	Version   byte = 0x0
-	PubKeyLen      = 64
+	Version      byte = 0x0
+	PubKeyLen         = 64
+	LenVersion        = 1
+	LenCheckSum       = 4
+	LenRipemd160      = 20
 )
 
 type Wallet struct {
@@ -61,9 +65,30 @@ func Verify(msgHash, sign, pubKey []byte) bool {
 func (a *Wallet) Address() string {
 	pub := a.PublicKey()
 	mid := Sha160(Sha256(pub))
-	checkSum := Sha256(Sha256(pub))[:4]
-	// 1bit version + 20 bit sha160 + 4 bit checksum
+	checkSum := Sha256(Sha256(ConcatBytes([]byte{Version}, mid)))[:LenCheckSum]
+	// 1byte version + 20 byte sha160 + 4 byte checksum
 	return Base58(ConcatBytes([]byte{Version}, mid, checkSum))
+}
+
+func AddressToRipemd160PubKey(add string) ([]byte, error) {
+	bs, err := Base58Decode(add)
+	if err != nil {
+		return nil, ErrWrap("address convert failed", err)
+	}
+	l := len(bs)
+	//
+	if l != LenVersion+LenRipemd160+LenCheckSum {
+		return nil, ErrWrapf("invalid address,size %d", l)
+	}
+	if bs[0] != Version {
+		return nil, ErrWrapf("invalid version,%d", bs[0])
+	}
+	result := bs[LenVersion : LenVersion+LenRipemd160]
+	doubleSha := Sha256(Sha256(bs[:LenVersion+LenRipemd160]))
+	if !bytes.Equal(bs[LenVersion+LenRipemd160:], doubleSha[:LenCheckSum]) {
+		return nil, ErrWrapf("invalid address,checksum failed")
+	}
+	return result, nil
 }
 
 //从私钥byte中还原账户

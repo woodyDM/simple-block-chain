@@ -7,11 +7,21 @@ import (
 )
 
 var (
-	Int1000 = []byte{0, 0, 0, 0, 0, 0, 3, 232}
-	Int0    = []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	Int1    = []byte{0, 0, 0, 0, 0, 0, 0, 1}
-	Int2    = []byte{0, 0, 0, 0, 0, 0, 0, 2}
+	Int1000          = []byte{0, 0, 0, 0, 0, 0, 3, 232}
+	Int0             = []byte{0, 0, 0, 0, 0, 0, 0, 0}
+	Int1             = []byte{0, 0, 0, 0, 0, 0, 0, 1}
+	Int2             = []byte{0, 0, 0, 0, 0, 0, 0, 2}
+	MockGlobalEvn    = &GlobalEnv{UnixTime: TimeProvider(MockTime())}
+	MockTimeInterval = 2000
 )
+
+func MockTime() func() int64 {
+	var i int64 = GenesisTime
+	return func() int64 {
+		i += int64(MockTimeInterval)
+		return i
+	}
+}
 
 type Sha256Lib struct {
 	ToSha256Factory   map[string]string
@@ -168,7 +178,8 @@ func TestScript_VM(t *testing.T) {
 
 //todo
 func TestGenesis(t *testing.T) {
-	chain := Genesis()
+	chain := Genesis(MockGlobalEvn)
 
 	t.Log(chain)
+
 }

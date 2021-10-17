@@ -1,6 +1,9 @@
 package core
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+	"time"
+)
 
 type TxType int32
 
@@ -22,7 +25,10 @@ var (
 		{174, 39, 70, 72, 166, 168, 162, 221, 205, 9, 50, 194, 57, 6, 61, 141, 89, 143, 163, 126, 39, 68, 160, 59, 244, 234, 204, 175, 222, 246, 47, 34},
 		{144, 210, 192, 20, 2, 137, 110, 100, 71, 14, 196, 100, 97, 190, 61, 110, 207, 240, 60, 0, 9, 157, 164, 111, 176, 14, 251, 28, 27, 142, 27, 54},
 		{73, 83, 74, 17, 154, 230, 214, 34, 134, 38, 20, 96, 177, 79, 86, 84, 175, 253, 240, 58, 120, 168, 81, 230, 215, 12, 43, 71, 92, 164, 5, 167}}
-	GenesisLen = len(GenesisPrivateKeys)
+
+	Env = &GlobalEnv{UnixTime: func() int64 {
+		return time.Now().Unix()
+	}}
 )
 
 /**
@@ -34,7 +40,7 @@ type Block struct {
 	Hash      string         //本区块hash
 	Nonce     string         //随机数
 	PreHash   string         //前一区块hash
-	Tx        []*Transaction //size>1  第0个一定是coinbasetransaction
+	Tx        []*Transaction //size>1  第0个一定是CoinbaseTransaction, CoinbaseTransaction 的Input脚本可以是任何bytes,不会校验
 	/**
 	以下字段可以推断出
 	*/
@@ -46,41 +52,126 @@ type Block struct {
 	Difficulty     string
 }
 
+type GlobalEnv struct {
+	UnixTime TimeProvider
+}
+
+type TimeProvider func() int64
+
 type BlockChain struct {
+	Env *GlobalEnv
 	*TxDatabase
 	Blocks  map[string]*Block
 	Current *Block
 }
 
-func (b *BlockChain) Size() int {
-	return len(b.Blocks)
+type TxDatabase struct {
+	Tx map[string]*Transaction
 }
 
-func Genesis() *BlockChain {
+type Transaction struct {
+	Timestamp int64
+	//交易类型
+	Type TxType
+	//输入
+	Inputs []*Input
+	//输出
+	Outputs []*Output
+	//额外字段，限制长度为 <=100bytes,可以作为备注等
+	Extra []byte
+	//Hash 以下为推断字段，仅占位用
+	Hash string
+}
+
+type Input struct {
+	//<sig> <pubKey>
+	Script Script
+	//之前某个 tx 的 Output
+	Output Output
+}
+
+type Output struct {
+	//Coin count
+	Fee int64
+	//OP_DUP OP_HASH160 OP_PUSH <pubKey160Hash> OP_EQ_VERIFY OP_CHECK_SIGN
+	Script *Script
+	//以下为推断字段
+	//Output所在的tx的 hash
+	//*注意*：此字段不参与本tx的Hash计算
+	//但是在Input中引用的时候，值必须存在,且需要被计算到Input的Hash中；因为是来自之前就计算好了的tx
+	TxHash string
+	//output在它所在交易的下标
+	TxIndex int
+	//输出的地址 可以从脚本中得到，不参与Hash计算
+	Address string
+}
+
+type Script [][]byte
+
+//---------------------- func below --------------------------
+func (c *BlockChain) Size() int {
+	return len(c.Blocks)
+}
+
+//创世
+func Genesis(env *GlobalEnv) *BlockChain {
 	chain := &BlockChain{
 		TxDatabase: &TxDatabase{
 			Tx: make(map[string]*Transaction),
 		},
 		Blocks: make(map[string]*Block),
+		Env:    env,
 	}
-	block := &Block{
-		Timestamp:      GenesisTime,
-		Nonce:          "",
-		PreHash:        "",
-		Tx:             createGenesisTx(),
-		Height:         0,
-		TxCount:        GenesisLen,
-		PreTxSum:       0,
-		PreOutputSum:   0,
-		MerkleTreeRoot: "",
-		Difficulty:     "",
-	}
-	chain.Blocks[block.Hash] = block
-	for _, t := range block.Tx {
-		chain.Tx[t.Hash] = t
-	}
-	chain.Current = block
+	block := NewBlock(nil, env)
+	chain.Append(block)
 	return chain
+}
+
+// 区块链添加一个新的已校验的区块
+func (c *BlockChain) Append(b *Block) {
+	_, e := c.Blocks[b.Hash]
+	if e {
+		Log.Errorf("Same Block Hash found! %s ", b.Hash)
+		panic(b.Hash)
+	}
+	c.Blocks[b.Hash] = b
+	for _, t := range b.Tx {
+		_, ok := c.Tx[t.Hash]
+		if ok {
+			Log.Errorf("Same Transaction Hash found!Block %s ", b.Hash)
+			panic(b.Hash)
+		}
+	}
+	c.Current = b
+}
+
+//新建区块,待添加Tx ，计算Hash等操作
+func NewBlock(pre *Block, env *GlobalEnv) *Block {
+	var b *Block
+	if pre == nil {
+		b = &Block{
+			Timestamp:    GenesisTime,
+			Tx:           createGenesisTx(),
+			Height:       0,
+			PreTxSum:     0,
+			PreOutputSum: 0,
+		}
+	} else {
+		preOutputCount := 0
+		for _, t := range pre.Tx {
+			preOutputCount += len(t.Outputs)
+		}
+		b = &Block{
+			Timestamp:    env.UnixTime(),
+			PreHash:      pre.Hash,
+			Tx:           make([]*Transaction, 0),
+			Height:       pre.Height + 1,
+			PreTxSum:     pre.PreTxSum + int64(pre.TxCount),
+			PreOutputSum: pre.PreOutputSum + int64(preOutputCount),
+		}
+	}
+	b.TxCount = len(b.Tx)
+	return b
 }
 
 func createGenesisTx() []*Transaction {
@@ -116,6 +207,19 @@ func createGenesisTx() []*Transaction {
 //OP_DUP OP_HASH160 OP_PUSH <pubKey160Hash> OP_EQ_VERIFY OP_CHECK_SIGN
 func buildP2PKHOutput(pubKey []byte) *Script {
 	ripemd160 := Sha160(Sha256(pubKey))
+	return _output(ripemd160)
+}
+
+//
+func buildP2PKHOutputWithAddress(add string) (*Script, error) {
+	key, err := AddressToRipemd160PubKey(add)
+	if err != nil {
+		return nil, err
+	}
+	return _output(key), nil
+}
+
+func _output(ripemd160 []byte) *Script {
 	return &Script{
 		OpDuplicateA,
 		OpSha160A,
@@ -140,57 +244,19 @@ func buildP2PKHInput(txHash []byte, w *Wallet) (*Script, error) {
 	}, nil
 }
 
-type TxDatabase struct {
-	Tx map[string]*Transaction
+//添加一笔已交易
+func (b *Block) AppendTx(tx *Transaction) {
+	b.Tx = append(b.Tx, tx)
 }
 
-type Transaction struct {
-	Timestamp int64
-	//交易类型
-	Type TxType
-	//输入
-	Inputs []*Input
-	//输出
-	Outputs []*Output
-	//额外字段，限制长度为 <=100bytes,可以作为备注等
-	Extra []byte
-	//Hash 以下为推断字段，仅占位用
-	Hash string
+//todo
+func (b *Block) UpdateHash() error {
+	return nil
 }
 
-type Input struct {
-	//<sig> <pubKey>
-	Script Script
-	//之前某个 tx 的 Output
-	Output Output
-}
-
-type Output struct {
-	//Coin count
-	Fee int64
-	//OP_DUP OP_HASH160 OP_PUSH <pubKey160Hash> OP_EQ_VERIFY OP_CHECK_SIGN
-	Script *Script
-
-	//以下为推断字段
-	//Output所在的tx的 hash
-	//*注意*：此字段不参与本tx的Hash计算
-	//但是在Input中引用的时候，值必须存在,且需要被计算到Input的Hash中；因为是来自之前就计算好了的tx
-	TxHash string
-	//output在它所在交易的下标
-	TxIndex int
-	//输出的地址 可以从脚本中得到，不参与Hash计算
-	Address string
-}
-
-type Script [][]byte
-
-//---------------- func below ----------------
-func (b *Block) infer(pre *Block) {
-	b.Height = pre.Height + 1
-	b.TxCount = len(b.Tx)
-	b.PreTxSum = pre.PreTxSum + int64(pre.TxCount)
-	//MerkleTreeRoot Difficulty
-
+//todo
+func (b *Block) CheckWith(c *BlockChain) error {
+	return nil
 }
 
 //cal transaction hash with all field
@@ -224,6 +290,9 @@ func (o *Output) CalThisTxHash() []byte {
 
 //在作为Input中位于之前tx时，计算Hash
 func (o *Output) CalPreTxHash() ([]byte, error) {
+	if o.TxHash == "" {
+		return nil, ErrWrapf("Pre Hash should not be empty")
+	}
 	hashBytes, err := hex.DecodeString(o.TxHash)
 	if err != nil {
 		return nil, ErrWrap("Pre Hash not exit", err)

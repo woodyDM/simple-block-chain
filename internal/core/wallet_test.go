@@ -2,8 +2,8 @@ package core
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -35,22 +35,46 @@ func TestWallet_Sign_Verify(t *testing.T) {
 }
 
 func TestGenAccount(t *testing.T) {
-	all:=new(bytes.Buffer)
+	all := new(bytes.Buffer)
 
 	for i := 0; i < 10; i++ {
 		wallet, _ := NewWallet()
-		buf:=new(bytes.Buffer)
+		buf := new(bytes.Buffer)
 		buf.WriteString("{")
 		pv := wallet.PrivateKey()
-		for i,it:=range pv {
+		for i, it := range pv {
 			buf.WriteString(strconv.Itoa(int(it)))
-			if i<len(pv)-1{
+			if i < len(pv)-1 {
 				buf.WriteString(",")
 			}
 		}
 		buf.WriteString("},")
 		all.WriteString(buf.String())
 	}
-	fmt.Println(all.String())
+}
 
+func TestAddressToRipemd160PubKey(t *testing.T) {
+	w := getTestWallet()
+	pubkey, err := AddressToRipemd160PubKey(w.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubKey2 := Sha160(Sha256(w.PublicKey()))
+	if !bytes.Equal(pubkey, pubKey2) {
+		t.Fatal("should same")
+	}
+}
+
+func TestAddressToRipemd160PubKey_WithError(t *testing.T) {
+	w := getTestWallet()
+	b:=[]byte(w.Address())
+	b[0] = 1
+	_, err := AddressToRipemd160PubKey(string(b))
+	if !strings.Contains(err.Error(),"invalid base58 string") {
+		t.Fatal(err)
+	}
+}
+
+func getTestWallet() *Wallet {
+	return RestoreWallet(GenesisPrivateKeys[0])
 }
