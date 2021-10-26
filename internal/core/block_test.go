@@ -183,3 +183,50 @@ func TestGenesis(t *testing.T) {
 	t.Log(chain)
 
 }
+
+func TestDiff(t *testing.T) {
+	_testDiff("fff", "fff", 2, 2, t)
+	_testDiff("111", "222", 4, 2, t)
+	_testDiff("333", "111", 1, 3, t)
+	_testDiff("fff", "555", 1, 3, t)
+	//10： 4929388
+	_testDiff("2341fac", "4b376c", 2, 15, t)
+	//10 135558177
+	_testDiff("2341fac", "8147421", 11, 3, t)
+}
+
+func _testDiff(in, expect string, a, t int64, te *testing.T) {
+	result := diff(in, a, t)
+	if result != expect {
+		te.Fatal("fail")
+	}
+}
+
+func TestGenesisBlock(t *testing.T) {
+	block := genesisBlock()
+	merk:="3e2a23a79594b2a5a02e1a1328aca0c65b6694f0e07b711931fa8c907d61cb4c"
+	if block.MerkleTreeRoot != merk {
+		t.Fatal("merk fail")
+	}
+	if block.Difficulty!=GenesisDiff{
+		t.Fatal("diff fail")
+	}
+	var r   = new(HashResult)
+	for !r.Ok {
+		r=block.TryHash()
+	}
+
+	fmt.Println(r)
+}
+
+func TestHexNonce(t *testing.T) {
+	v := Env.Rd.Int63()
+	bytes:= Int64ToBytes(v)
+	s := hex.EncodeToString(bytes)
+	s2:=fmt.Sprintf("%08x",v)
+	fmt.Println(s)
+	fmt.Println(s2)
+	decodeString, _ := hex.DecodeString("0663b7b81501df6c")
+	fmt.Println(decodeString)
+}
+

@@ -2,19 +2,29 @@ package core
 
 import (
 	"encoding/hex"
+	"fmt"
+	"math/big"
+	"math/rand"
 	"time"
 )
 
 type TxType int32
 
 const (
-	NormalTx         TxType = 0 //普通交易
-	GenesisTx        TxType = 1 //创世交易
-	GenesisCoinCount        = 100
-	GenesisTime             = 1630814880000
+	NormalTx           TxType = 0 //普通交易
+	GenesisTx          TxType = 1 //创世交易
+	GenesisCoinCount          = 100
+	GenesisTime               = 1630814880000
+	GenesisDiff               = "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" //60f
+	GenesisPreHash            = "0000000000000000000000000000000000000000000000000000000000000000" //60f
+	DiffTargetSpacing         = 1 * 60                                                             //1min 一个区块
+	DiffTargetTimeSpan        = 60 * 60                                                            // 每60分钟调整一次难度
+	DiffIntervalBlock         = DiffTargetTimeSpan / DiffTargetSpacing                             //60次以后，调整难度
+
 )
 
 var (
+	//仅仅是为了后续方便编码和测试，实际上
 	GenesisPrivateKeys = [][]byte{{44, 190, 182, 28, 72, 154, 195, 227, 70, 39, 86, 55, 22, 45, 247, 94, 231, 212, 68, 207, 32, 212, 252, 144, 140, 150, 134, 231, 1, 40, 214, 69},
 		{37, 175, 36, 250, 25, 142, 150, 140, 15, 59, 114, 33, 160, 85, 234, 46, 232, 8, 148, 252, 209, 35, 247, 208, 198, 208, 180, 87, 199, 123, 21, 163},
 		{124, 193, 148, 216, 238, 84, 77, 65, 123, 33, 174, 115, 84, 138, 92, 104, 208, 203, 126, 6, 46, 101, 141, 154, 10, 90, 248, 108, 65, 53, 156, 45},
@@ -38,7 +48,7 @@ var (
 type Block struct {
 	Timestamp int64          //时间戳
 	Hash      string         //本区块hash
-	Nonce     string         //随机数
+	Nonce     string         //随机数  64bit (8byte) field
 	PreHash   string         //前一区块hash
 	Tx        []*Transaction //size>1  第0个一定是CoinbaseTransaction, CoinbaseTransaction 的Input脚本可以是任何bytes,不会校验
 	/**
@@ -122,7 +132,7 @@ func Genesis(env *GlobalEnv) *BlockChain {
 		Blocks: make(map[string]*Block),
 		Env:    env,
 	}
-	block := NewBlock(nil, env)
+	block := genesisBlock()
 	chain.Append(block)
 	return chain
 }
@@ -145,38 +155,52 @@ func (c *BlockChain) Append(b *Block) {
 	c.Current = b
 }
 
-//新建区块,待添加Tx ，计算Hash等操作
-func NewBlock(pre *Block, env *GlobalEnv) *Block {
-	var b *Block
-	if pre == nil {
-		b = &Block{
-			Timestamp:    GenesisTime,
-			Tx:           createGenesisTx(),
-			Height:       0,
-			PreTxSum:     0,
-			PreOutputSum: 0,
-		}
-	} else {
-		preOutputCount := 0
-		for _, t := range pre.Tx {
-			preOutputCount += len(t.Outputs)
-		}
-		b = &Block{
-			Timestamp:    env.UnixTime(),
-			PreHash:      pre.Hash,
-			Tx:           make([]*Transaction, 0),
-			Height:       pre.Height + 1,
-			PreTxSum:     pre.PreTxSum + int64(pre.TxCount),
-			PreOutputSum: pre.PreOutputSum + int64(preOutputCount),
-		}
+func genesisBlock() *Block {
+	b := &Block{
+		Timestamp:    GenesisTime,
+		Tx:           createGenesisTx(),
+		Height:       0,
+		PreHash:      GenesisPreHash,
+		PreTxSum:     0,
+		PreOutputSum: 0,
 	}
+	txIds := make([]string, 0)
+	for _, tx := range b.Tx {
+		txIds = append(txIds, tx.Hash)
+	}
+	merk, e := MerkleRootStr(txIds)
+	if e != nil {
+		panic(e)
+	}
+	b.MerkleTreeRoot = merk
+	b.Difficulty = GenesisDiff
+	return b
+}
+
+//新建区块,待添加Tx ，计算Hash等操作
+func NewBlock(pre *Block, tx []*Transaction, env *GlobalEnv) *Block {
+
+	preOutputCount := 0
+	for _, t := range pre.Tx {
+		preOutputCount += len(t.Outputs)
+	}
+	b := &Block{
+		Timestamp:    env.UnixTime(),
+		PreHash:      pre.Hash,
+		Tx:           tx,
+		Height:       pre.Height + 1,
+		PreTxSum:     pre.PreTxSum + int64(pre.TxCount),
+		PreOutputSum: pre.PreOutputSum + int64(preOutputCount),
+	}
+
 	b.TxCount = len(b.Tx)
 	return b
 }
 
 func createGenesisTx() []*Transaction {
-	outs := make([]*Output, 0)
+	txs := make([]*Transaction, 0)
 	for i, priv := range GenesisPrivateKeys {
+		outs := make([]*Output, 0)
 		account := RestoreWallet(priv)
 		out := &Output{
 			Fee:     GenesisCoinCount,
@@ -185,22 +209,23 @@ func createGenesisTx() []*Transaction {
 			Address: account.Address(),
 		}
 		outs = append(outs, out)
+		tx := &Transaction{
+			Timestamp: GenesisTime,
+			Type:      GenesisTx,
+			Outputs:   outs,
+		}
+		hash, err := tx.CalHash()
+		if err != nil {
+			panic(err)
+		}
+		tx.Hash = hex.EncodeToString(hash)
+		for _, o := range tx.Outputs {
+			o.TxHash = tx.Hash
+		}
+		txs = append(txs, tx)
 	}
-	tx := &Transaction{
-		Timestamp: GenesisTime,
-		Type:      GenesisTx,
-		Outputs:   outs,
-	}
-	txHash, err := tx.CalHash()
-	if err != nil {
-		panic(err)
-	}
-	txHashStr := string(txHash)
-	tx.Hash = txHashStr
-	for _, it := range outs {
-		it.TxHash = txHashStr
-	}
-	return []*Transaction{tx}
+	return txs
+
 }
 
 // 为了简单 coinbase也用 P2PKH
@@ -248,11 +273,6 @@ func buildP2PKHInput(txHash []byte, w *Wallet) (*Script, error) {
 func (b *Block) AppendTx(tx *Transaction) {
 	tx.Type = NormalTx
 	b.Tx = append(b.Tx, tx)
-}
-
-//todo
-func (b *Block) UpdateHash() error {
-	return nil
 }
 
 //todo
@@ -336,4 +356,91 @@ func (s *Script) CalHash() []byte {
 //添加script
 func (s *Script) append(b []byte) {
 	*s = append(*s, b)
+}
+
+// ==================================== Difficulty ====================================
+func (c *BlockChain) NextDifficulty() string {
+	b := c.Current
+	if b.Height == 0 {
+		return GenesisDiff
+	}
+	//Only change once per interval
+	if (b.Height+1)%DiffIntervalBlock != 0 {
+		return b.Difficulty
+	}
+	var first = b
+	for i := 0; i < DiffIntervalBlock-1; i++ {
+		first = c.Blocks[first.PreHash]
+	}
+	var actualSpan = b.Timestamp - first.Timestamp
+	if actualSpan < DiffTargetTimeSpan/4 {
+		actualSpan = DiffTargetTimeSpan / 4
+	}
+	if actualSpan > DiffTargetTimeSpan*4 {
+		actualSpan = DiffTargetTimeSpan * 4
+	}
+	return diff(b.Difficulty, actualSpan, DiffTargetTimeSpan)
+}
+
+func diff(curDiff string, actualSpan, targetSpan int64) string {
+	////新的难度值 = 旧难度值 * （nActualTimespan/nTargetTimespan）
+	oldDiff, ok := new(big.Int).SetString(curDiff, 16)
+	if !ok {
+		panic(ErrWrapf("invalid hex diff %s", curDiff))
+	}
+	r := new(big.Int)
+	actualSpanB := new(big.Int).SetInt64(actualSpan)
+	targetSpanB := new(big.Int).SetInt64(targetSpan)
+	r.Mul(oldDiff, actualSpanB)
+	r = r.Div(r, targetSpanB)
+	return r.Text(16)
+}
+
+// ==================================== Block Hash ====================================
+
+type HashResult struct {
+	Nonce string
+	Hash  string
+	Ok    bool
+	Err   error
+}
+
+func (b *Block) TryHash() *HashResult {
+	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	v := rd.Int63()
+	all := make([][]byte, 0)
+	preBytes, err := hex.DecodeString(b.PreHash)
+	if err != nil {
+		return &HashResult{
+			Ok:  false,
+			Err: err,
+		}
+	}
+	merk, err := hex.DecodeString(b.MerkleTreeRoot)
+	if err != nil {
+		return &HashResult{
+			Ok:  false,
+			Err: err,
+		}
+	}
+	all = append(all, Int64ToBytes(b.Timestamp))
+	all = append(all, preBytes)
+	all = append(all, merk)
+	all = append(all, Int64ToBytes(v))
+	nonce := fmt.Sprintf("%08x", v)
+	if b.Difficulty == "" {
+		return &HashResult{
+			Ok:  false,
+			Err: ErrWrapf("empty block difficulty"),
+		}
+	}
+
+	allSha256 := ConcatBytes(all...)
+	hash := hex.EncodeToString(Sha256(Sha256(allSha256)))
+	return &HashResult{
+		Nonce: nonce,
+		Hash:  hash,
+		Ok:    hash < b.Difficulty,
+		Err:   nil,
+	}
 }

@@ -62,7 +62,7 @@ func ConcatBytes(bs ...[]byte) []byte {
 	return r
 }
 
-//计算Merkle根
+// ====================================  计算Merkle根 ====================================
 // https://blog.csdn.net/shangsongwww/article/details/85339243
 // https://en.bitcoin.it/wiki/Protocol_documentation
 // Note:  Hashes in Merkle Tree displayed in the Block Explorer are of little-endian notation.
@@ -91,6 +91,7 @@ func Reverse(r []byte) []byte {
 	}
 	return runes
 }
+
 
 func merkleRoot(bs [][]byte) []byte {
 	l := len(bs)
