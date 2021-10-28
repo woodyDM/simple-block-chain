@@ -85,7 +85,7 @@ type Transaction struct {
 	Type TxType
 	//输入
 	Inputs []*Input
-	//输出
+	//输出, 规定：每个Transaction中，一个Address只能有一个Output
 	Outputs []*Output
 	//额外字段，限制长度为 <=100bytes,可以作为备注等
 	Extra []byte
@@ -105,15 +105,14 @@ type Output struct {
 	Fee int64
 	//OP_DUP OP_HASH160 OP_PUSH <pubKey160Hash> OP_EQ_VERIFY OP_CHECK_SIGN
 	Script *Script
-	//output在它所在交易的下标,可以推断得出
+	//output在它所在交易的下标,可以推断得出, 参与Hash
 	TxIndex int
-	//输出的地址 可以从脚本反推脚本的hash160，不参与Hash计算
+	//输出的地址 可以从脚本反推脚本的hash160， 参与Hash计算
 	Address string
 	//Output所在的tx的 hash
 	//*注意*：此字段不参与本tx的Hash计算
 	//但是在Input中引用的时候，值必须存在,且需要被计算到Input的Hash中；因为是来自之前就计算好了的tx
 	TxHash string
-
 }
 
 type Script [][]byte
@@ -226,7 +225,7 @@ func checkTx(tx []*Transaction) error {
 		if it.Type != NormalTx {
 			return ErrWrapf("tx should be normal")
 		}
-		if len(it.Extra)>100{
+		if len(it.Extra) > 100 {
 			return ErrWrapf("tx extra len >100")
 		}
 	}
@@ -342,7 +341,8 @@ func (o *Output) CalThisTxHash() []byte {
 	feeBytes := Int64ToBytes(o.Fee)
 	scriptBytes := o.Script.CalHash()
 	idxBytes := Int64ToBytes(int64(o.TxIndex))
-	all := ConcatBytes(feeBytes, scriptBytes, idxBytes)
+	addHash := Sha256([]byte(o.Address))
+	all := ConcatBytes(feeBytes, scriptBytes, idxBytes, addHash)
 	return Sha256(all)
 }
 

@@ -77,14 +77,16 @@ func TestOutput_CalThisTxHashHash(t *testing.T) {
 	s.append([]byte{1, 2, 3, 4})
 	s.append([]byte{1, 2, 3, 4, 5, 6})
 
+	w := getTestWallet()
 	out := Output{
 		Fee:     1000,
 		Script:  s,
 		TxIndex: 2,
+		Address: w.Address(),
 	}
 
 	scriptSha := Sha256([]byte{OpDuplicate, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6})
-	str := Sha256Str(ConcatBytes(Int1000, scriptSha, Int2))
+	str := Sha256Str(ConcatBytes(Int1000, scriptSha, Int2, Sha256([]byte(w.Address()))))
 
 	if str != hex.EncodeToString(out.CalThisTxHash()) {
 		t.Fatal("Fail")
@@ -204,23 +206,17 @@ func _testDiff(in, expect string, a, t int64, te *testing.T) {
 
 func TestGenesisBlock(t *testing.T) {
 	block := genesisBlock()
-	merk:="3e2a23a79594b2a5a02e1a1328aca0c65b6694f0e07b711931fa8c907d61cb4c"
+	merk := "ef551a513148cf836ba134ff59492806bdc5d0256816210630694f1634fdfc25"
 	if block.MerkleTreeRoot != merk {
 		t.Fatal("merk fail")
 	}
-	if block.Difficulty!=GenesisDiff{
+	if block.Difficulty != GenesisDiff {
 		t.Fatal("diff fail")
 	}
-	r:=block.TryHash()
+	r := block.TryHash()
 	if r.Ok {
-		if r.Hash>=block.Difficulty {
+		if r.Hash >= block.Difficulty {
 			t.Fatal("hash fail")
 		}
 	}
 }
-
-
-
-
-
-
