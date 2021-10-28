@@ -211,22 +211,16 @@ func TestGenesisBlock(t *testing.T) {
 	if block.Difficulty!=GenesisDiff{
 		t.Fatal("diff fail")
 	}
-	var r   = new(HashResult)
-	for !r.Ok {
-		r=block.TryHash()
+	r:=block.TryHash()
+	if r.Ok {
+		if r.Hash>=block.Difficulty {
+			t.Fatal("hash fail")
+		}
 	}
-
-	fmt.Println(r)
 }
 
-func TestHexNonce(t *testing.T) {
-	v := Env.Rd.Int63()
-	bytes:= Int64ToBytes(v)
-	s := hex.EncodeToString(bytes)
-	s2:=fmt.Sprintf("%08x",v)
-	fmt.Println(s)
-	fmt.Println(s2)
-	decodeString, _ := hex.DecodeString("0663b7b81501df6c")
-	fmt.Println(decodeString)
-}
+
+
+
+
 

@@ -105,15 +105,15 @@ type Output struct {
 	Fee int64
 	//OP_DUP OP_HASH160 OP_PUSH <pubKey160Hash> OP_EQ_VERIFY OP_CHECK_SIGN
 	Script *Script
-	//以下为推断字段
+	//output在它所在交易的下标,可以推断得出
+	TxIndex int
+	//输出的地址 可以从脚本反推脚本的hash160，不参与Hash计算
+	Address string
 	//Output所在的tx的 hash
 	//*注意*：此字段不参与本tx的Hash计算
 	//但是在Input中引用的时候，值必须存在,且需要被计算到Input的Hash中；因为是来自之前就计算好了的tx
 	TxHash string
-	//output在它所在交易的下标
-	TxIndex int
-	//输出的地址 可以从脚本反推脚本的hash160，不参与Hash计算
-	Address string
+
 }
 
 type Script [][]byte
@@ -168,33 +168,70 @@ func genesisBlock() *Block {
 	for _, tx := range b.Tx {
 		txIds = append(txIds, tx.Hash)
 	}
-	merk, e := MerkleRootStr(txIds)
-	if e != nil {
-		panic(e)
+	err := b.updateMerk()
+	if err != nil {
+		panic(err)
 	}
-	b.MerkleTreeRoot = merk
 	b.Difficulty = GenesisDiff
 	return b
 }
 
-//新建区块,待添加Tx ，计算Hash等操作
-func NewBlock(pre *Block, tx []*Transaction, env *GlobalEnv) *Block {
+func (b *Block) updateMerk() error {
+	txIds := make([]string, 0)
+	for _, tx := range b.Tx {
+		txIds = append(txIds, tx.Hash)
+	}
+	merk, e := MerkleRootStr(txIds)
+	if e != nil {
+		return e
+	}
+	b.MerkleTreeRoot = merk
+	return nil
+}
 
+//新建区块,待添加Tx ，计算Hash等操作
+func (c *BlockChain) NewBlock(tx []*Transaction) (*Block, error) {
+
+	pre := c.Current
 	preOutputCount := 0
 	for _, t := range pre.Tx {
 		preOutputCount += len(t.Outputs)
 	}
 	b := &Block{
-		Timestamp:    env.UnixTime(),
+		Timestamp:    c.Env.UnixTime(),
 		PreHash:      pre.Hash,
 		Tx:           tx,
 		Height:       pre.Height + 1,
+		TxCount:      len(tx),
 		PreTxSum:     pre.PreTxSum + int64(pre.TxCount),
 		PreOutputSum: pre.PreOutputSum + int64(preOutputCount),
+		Difficulty:   c.NextDifficulty(),
 	}
+	err := b.updateMerk()
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
 
-	b.TxCount = len(b.Tx)
-	return b
+func checkTx(tx []*Transaction) error {
+	l := len(tx)
+	if l < 2 {
+		return ErrWrapf("tx length < 2")
+	}
+	for _, it := range tx {
+		if it.Timestamp == 0 {
+			return ErrWrapf("tx time is 0")
+		}
+		if it.Type != NormalTx {
+			return ErrWrapf("tx should be normal")
+		}
+		if len(it.Extra)>100{
+			return ErrWrapf("tx extra len >100")
+		}
+	}
+	return nil
+
 }
 
 func createGenesisTx() []*Transaction {
@@ -407,7 +444,7 @@ type HashResult struct {
 
 func (b *Block) TryHash() *HashResult {
 	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	v := rd.Int63()
+	nonceValue := rd.Int63()
 	all := make([][]byte, 0)
 	preBytes, err := hex.DecodeString(b.PreHash)
 	if err != nil {
@@ -426,8 +463,8 @@ func (b *Block) TryHash() *HashResult {
 	all = append(all, Int64ToBytes(b.Timestamp))
 	all = append(all, preBytes)
 	all = append(all, merk)
-	all = append(all, Int64ToBytes(v))
-	nonce := fmt.Sprintf("%08x", v)
+	all = append(all, Int64ToBytes(nonceValue))
+	nonce := fmt.Sprintf("%08x", nonceValue)
 	if b.Difficulty == "" {
 		return &HashResult{
 			Ok:  false,
