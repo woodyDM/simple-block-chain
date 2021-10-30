@@ -71,11 +71,14 @@ type TimeProvider func() int64
 type BlockChain struct {
 	Env *GlobalEnv
 	*TxDatabase
+	//key block hash
 	Blocks  map[string]*Block
+	//
 	Current *Block
 }
 
 type TxDatabase struct {
+	//key
 	Tx map[string]*Transaction
 }
 
@@ -116,6 +119,59 @@ type Output struct {
 }
 
 type Script [][]byte
+
+type Utxo struct {
+	Address string
+	TxHash  string
+	TxIndex int
+	Fee     int64
+}
+
+type UtxoDatabase interface {
+	add(u *Utxo)
+	get(address string) []*Utxo
+	remove(u *Utxo) error
+}
+
+type InMemUtxoDatabase struct {
+	db map[string][]*Utxo
+}
+
+func NewInMemUtxoDatabase() UtxoDatabase {
+	return &InMemUtxoDatabase{db: make(map[string][]*Utxo)}
+}
+
+func (i *InMemUtxoDatabase) add(u *Utxo) {
+	address := u.Address
+	_, ok := i.db[address]
+	if !ok {
+		i.db[address] = make([]*Utxo, 0)
+	}
+	i.db[address] = append(i.db[address], u)
+}
+
+func (i *InMemUtxoDatabase) get(address string) []*Utxo {
+	return i.db[address]
+}
+
+func (i *InMemUtxoDatabase) remove(u *Utxo) error {
+	add := u.Address
+	l := i.db[add]
+	m := make([]*Utxo, 0)
+	removed := false
+	for _, it := range l {
+		if it.TxHash == u.TxHash && it.TxIndex == it.TxIndex {
+			removed = true
+		} else {
+			m = append(m, it)
+		}
+	}
+	if !removed {
+		return ErrWrapf("not found utxo %v ", u)
+	}
+	i.db[add] = m
+	return nil
+}
 
 //---------------------- func below --------------------------
 func (c *BlockChain) Size() int {
@@ -250,13 +306,9 @@ func createGenesisTx() []*Transaction {
 			Type:      GenesisTx,
 			Outputs:   outs,
 		}
-		hash, err := tx.CalHash()
+		err := tx.UpdateHash()
 		if err != nil {
 			panic(err)
-		}
-		tx.Hash = hex.EncodeToString(hash)
-		for _, o := range tx.Outputs {
-			o.TxHash = tx.Hash
 		}
 		txs = append(txs, tx)
 	}
@@ -316,14 +368,14 @@ func (b *Block) CheckWith(c *BlockChain) error {
 	return nil
 }
 
-//cal transaction hash with all field
-func (t *Transaction) CalHash() ([]byte, error) {
+//cal this transaction hash and update hexHash into Output
+func (t *Transaction) UpdateHash() error {
 	all := make([][]byte, 0)
 	all = append(all, Int64ToBytes(t.Timestamp))
 	all = append(all, Int64ToBytes(int64(int32(t.Type))))
 	for _, in := range t.Inputs {
 		if inHash, err := in.CalHash(); err != nil {
-			return nil, err
+			return err
 		} else {
 			all = append(all, inHash)
 		}
@@ -333,7 +385,13 @@ func (t *Transaction) CalHash() ([]byte, error) {
 	}
 	all = append(all, t.Extra)
 	allSha256 := ConcatBytes(all...)
-	return Sha256(allSha256), nil
+	txHash := Sha256(allSha256)
+	txHashHex := hex.EncodeToString(txHash)
+	for _, o := range t.Outputs {
+		o.TxHash = txHashHex
+	}
+	t.Hash = txHashHex
+	return nil
 }
 
 //计算本tx时用的Hash

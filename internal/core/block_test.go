@@ -220,3 +220,57 @@ func TestGenesisBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestMemUtxoDb(t *testing.T) {
+	db := NewInMemUtxoDatabase()
+	add := getTestWallet().Address()
+	l1 := db.get(add)
+	if len(l1) != 0 {
+		t.Fatal("0")
+	}
+	u := &Utxo{
+		Address: add,
+		TxHash:  "111",
+		TxIndex: 0,
+		Fee:     100,
+	}
+	db.add(u)
+
+	if len(db.get(add)) != 1 {
+		t.Fatal()
+	}
+	err := db.remove(u)
+	if err != nil {
+		t.Fatal()
+	}
+	if len(db.get(add)) != 0 {
+		t.Fatal()
+	}
+}
+
+
+func TestMemUtxoDb_withNotExistUtxo(t *testing.T) {
+	db := NewInMemUtxoDatabase()
+	add := getTestWallet().Address()
+
+	u := &Utxo{
+		Address: add,
+		TxHash:  "111",
+		TxIndex: 0,
+		Fee:     100,
+	}
+	db.add(u)
+
+	u2 := &Utxo{
+		Address: add,
+		TxHash:  "1111",
+		TxIndex: 0,
+		Fee:     100,
+	}
+
+	err := db.remove(u2)
+	if err == nil {
+		t.Fatal()
+	}
+
+}
