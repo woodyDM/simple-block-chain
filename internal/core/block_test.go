@@ -178,12 +178,34 @@ func TestScript_VM(t *testing.T) {
 
 }
 
-//todo
 func TestGenesis(t *testing.T) {
-	chain := Genesis(MockGlobalEvn)
-
-	t.Log(chain)
-
+	c := Genesis(MockGlobalEvn)
+	for hash, tx := range c.Tx {
+		if len(tx.Outputs)!=1{
+			t.Fatal("len")
+		}
+		o:=tx.Outputs[0]
+		utxo:=c.GetUtxo(o.Address)
+		if len(utxo)!=1{
+			t.Fatal("utxo len 1")
+		}
+		utx:=utxo[0]
+		if o.TxHash!=utx.TxHash {
+			t.Fatal("Tx hash")
+		}
+		if o.TxIndex!=utx.TxIndex{
+			t.Fatal("txidx ")
+		}
+		if o.TxHash!= hash {
+			t.Fatal("tx hash")
+		}
+		if utx.TxHash!=hash{
+			t.Fatal("utxo tx hash")
+		}
+		if o.Fee!=utx.Fee {
+			t.Fatal("fee ")
+		}
+	}
 }
 
 func TestDiff(t *testing.T) {
@@ -219,12 +241,32 @@ func TestGenesisBlock(t *testing.T) {
 			t.Fatal("hash fail")
 		}
 	}
+	newR:= block.HashWith(GenesisBlockNonce)
+	if !newR.Ok{
+		t.Fatal("should ok")
+	}
+	if newR.Hash!=block.Hash {
+		t.Fatal("hash check fail")
+	}
+}
+
+func __TestGenesisHashCal(t *testing.T) {
+	block:=genesisBlock()
+	var  r *HashResult
+	for  {
+		r=block.TryHash()
+		if r.Ok {
+			break
+		}
+	}
+	fmt.Println(r)
+
 }
 
 func TestMemUtxoDb(t *testing.T) {
 	db := NewInMemUtxoDatabase()
 	add := getTestWallet().Address()
-	l1 := db.get(add)
+	l1 := db.GetUtxo(add)
 	if len(l1) != 0 {
 		t.Fatal("0")
 	}
@@ -234,16 +276,16 @@ func TestMemUtxoDb(t *testing.T) {
 		TxIndex: 0,
 		Fee:     100,
 	}
-	db.add(u)
+	db.AddUtxo(u)
 
-	if len(db.get(add)) != 1 {
+	if len(db.GetUtxo(add)) != 1 {
 		t.Fatal()
 	}
-	err := db.remove(u)
+	err := db.RemoveUtxo(u)
 	if err != nil {
 		t.Fatal()
 	}
-	if len(db.get(add)) != 0 {
+	if len(db.GetUtxo(add)) != 0 {
 		t.Fatal()
 	}
 }
@@ -259,7 +301,7 @@ func TestMemUtxoDb_withNotExistUtxo(t *testing.T) {
 		TxIndex: 0,
 		Fee:     100,
 	}
-	db.add(u)
+	db.AddUtxo(u)
 
 	u2 := &Utxo{
 		Address: add,
@@ -268,9 +310,28 @@ func TestMemUtxoDb_withNotExistUtxo(t *testing.T) {
 		Fee:     100,
 	}
 
-	err := db.remove(u2)
+	err := db.RemoveUtxo(u2)
 	if err == nil {
 		t.Fatal()
 	}
 
 }
+
+func TestNonceGen(t *testing.T) {
+	var nonceValue int64=102099534523455
+	nonce := fmt.Sprintf("%016x", nonceValue)
+	if nonce!="00005cdbe67cac3f"{
+		t.Fatal("hex")
+	}
+	v,_:=hex.DecodeString(nonce)
+	b := Int64ToBytes(nonceValue)
+	if len(v)!=len(b){
+		t.Fatal("f")
+	}
+	for i:=0;i<len(v);i++{
+		if v[i]!=b[i]{
+			t.Fatal("idx i fail")
+		}
+	}
+}
+

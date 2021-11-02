@@ -17,9 +17,11 @@ const (
 	GenesisTime               = 1630814880000
 	GenesisDiff               = "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" //60f
 	GenesisPreHash            = "0000000000000000000000000000000000000000000000000000000000000000" //60f
-	DiffTargetSpacing         = 1 * 60                                                             //1min 一个区块
-	DiffTargetTimeSpan        = 60 * 60                                                            // 每60分钟调整一次难度
-	DiffIntervalBlock         = DiffTargetTimeSpan / DiffTargetSpacing                             //60次以后，调整难度
+	GenesisBlockHash          = "00000a53b81a1429fdb26c99a746450da0dcfe7b38b2db403e0d9cb89e74fa09"
+	GenesisBlockNonce         = "0410f4e35d1b266e"
+	DiffTargetSpacing         = 1 * 60                                 //1min 一个区块
+	DiffTargetTimeSpan        = 60 * 60                                // 每60分钟调整一次难度
+	DiffIntervalBlock         = DiffTargetTimeSpan / DiffTargetSpacing //60次以后，调整难度
 
 )
 
@@ -70,9 +72,12 @@ type TimeProvider func() int64
 
 type BlockChain struct {
 	Env *GlobalEnv
+	//txs
 	*TxDatabase
+	//utxo
+	UtxoDatabase
 	//key block hash
-	Blocks  map[string]*Block
+	Blocks map[string]*Block
 	//
 	Current *Block
 }
@@ -128,9 +133,9 @@ type Utxo struct {
 }
 
 type UtxoDatabase interface {
-	add(u *Utxo)
-	get(address string) []*Utxo
-	remove(u *Utxo) error
+	AddUtxo(u *Utxo)
+	GetUtxo(address string) []*Utxo
+	RemoveUtxo(u *Utxo) error
 }
 
 type InMemUtxoDatabase struct {
@@ -141,7 +146,7 @@ func NewInMemUtxoDatabase() UtxoDatabase {
 	return &InMemUtxoDatabase{db: make(map[string][]*Utxo)}
 }
 
-func (i *InMemUtxoDatabase) add(u *Utxo) {
+func (i *InMemUtxoDatabase) AddUtxo(u *Utxo) {
 	address := u.Address
 	_, ok := i.db[address]
 	if !ok {
@@ -150,17 +155,20 @@ func (i *InMemUtxoDatabase) add(u *Utxo) {
 	i.db[address] = append(i.db[address], u)
 }
 
-func (i *InMemUtxoDatabase) get(address string) []*Utxo {
+func (i *InMemUtxoDatabase) GetUtxo(address string) []*Utxo {
 	return i.db[address]
 }
 
-func (i *InMemUtxoDatabase) remove(u *Utxo) error {
+func (i *InMemUtxoDatabase) RemoveUtxo(u *Utxo) error {
 	add := u.Address
 	l := i.db[add]
 	m := make([]*Utxo, 0)
 	removed := false
 	for _, it := range l {
-		if it.TxHash == u.TxHash && it.TxIndex == it.TxIndex {
+		if it == u {
+			if removed {
+				return ErrWrapf("Already removed %v", u)
+			}
 			removed = true
 		} else {
 			m = append(m, it)
@@ -184,30 +192,86 @@ func Genesis(env *GlobalEnv) *BlockChain {
 		TxDatabase: &TxDatabase{
 			Tx: make(map[string]*Transaction),
 		},
-		Blocks: make(map[string]*Block),
-		Env:    env,
+		Blocks:       make(map[string]*Block),
+		Env:          env,
+		UtxoDatabase: NewInMemUtxoDatabase(),
 	}
 	block := genesisBlock()
-	chain.Append(block)
+	e := chain.Append(block)
+	if e != nil {
+		panic(e)
+	}
 	return chain
 }
 
-// 区块链添加一个新的已校验的区块
-func (c *BlockChain) Append(b *Block) {
+// 区块链添加一个新的区块，并做简单校验
+func (c *BlockChain) Append(b *Block) error {
+	ec := checkWhenAppend(b)
+	if ec != nil {
+		return ec
+	}
 	_, e := c.Blocks[b.Hash]
 	if e {
 		Log.Errorf("Same Block Hash found! %s ", b.Hash)
 		panic(b.Hash)
 	}
 	c.Blocks[b.Hash] = b
+	c.Current = b
+	//update Transactions
 	for _, t := range b.Tx {
 		_, ok := c.Tx[t.Hash]
 		if ok {
 			Log.Errorf("Same Transaction Hash found!Block %s ", b.Hash)
 			panic(b.Hash)
 		}
+		c.Tx[t.Hash] = t
 	}
-	c.Current = b
+	//update utxo
+	if b.Height != 0 {
+		for idx, t := range b.Tx {
+			for _, i := range t.Inputs {
+				e := c.RemoveUtxo(newUtxo(t, idx, &i.Output))
+				if e != nil {
+					panic(ErrWrap("utxo not exist", e))
+				}
+			}
+		}
+	}
+	for i, t := range b.Tx {
+		for _, o := range t.Outputs {
+			c.AddUtxo(newUtxo(t, i, o))
+		}
+	}
+	return nil
+
+}
+//todo utxo checks
+func checkWhenAppend(b *Block) error {
+	if b.Nonce == "" {
+		return ErrWrapf("Empty nonce in block %v", b.Height)
+	}
+	if len(b.Tx) == 0 {
+		return ErrWrapf("Empty tx in block %v", b.Height)
+	}
+	if b.Hash == "" {
+		return ErrWrapf("Empty hash in block %v", b.Height)
+	}
+	e := b.HashWith(b.Nonce)
+	if !e.Ok {
+		return ErrWrapf("Invalid hash in block %v", b.Height)
+	}
+	if e.Hash != b.Hash {
+		return ErrWrapf("Illegal hash in block %v", b.Height)
+	}
+	return nil
+}
+func newUtxo(t *Transaction, txIdx int, o *Output) *Utxo {
+	return &Utxo{
+		Address: o.Address,
+		TxHash:  t.Hash,
+		TxIndex: txIdx,
+		Fee:     o.Fee,
+	}
 }
 
 func genesisBlock() *Block {
@@ -219,6 +283,7 @@ func genesisBlock() *Block {
 		PreTxSum:     0,
 		PreOutputSum: 0,
 	}
+	b.TxCount = len(b.Tx)
 	txIds := make([]string, 0)
 	for _, tx := range b.Tx {
 		txIds = append(txIds, tx.Hash)
@@ -228,6 +293,8 @@ func genesisBlock() *Block {
 		panic(err)
 	}
 	b.Difficulty = GenesisDiff
+	b.Nonce = GenesisBlockNonce
+	b.Hash = GenesisBlockHash
 	return b
 }
 
@@ -244,9 +311,8 @@ func (b *Block) updateMerk() error {
 	return nil
 }
 
-//新建区块,待添加Tx ，计算Hash等操作
+//新建区块, 只留下Nonce和 Hash待确定
 func (c *BlockChain) NewBlock(tx []*Transaction) (*Block, error) {
-
 	pre := c.Current
 	preOutputCount := 0
 	for _, t := range pre.Tx {
@@ -355,17 +421,6 @@ func buildP2PKHInput(txHash []byte, w *Wallet) (*Script, error) {
 		OpPushDataA,
 		w.PublicKey(),
 	}, nil
-}
-
-//添加一笔已交易
-func (b *Block) AppendTx(tx *Transaction) {
-	tx.Type = NormalTx
-	b.Tx = append(b.Tx, tx)
-}
-
-//todo
-func (b *Block) CheckWith(c *BlockChain) error {
-	return nil
 }
 
 //cal this transaction hash and update hexHash into Output
@@ -500,32 +555,44 @@ type HashResult struct {
 	Err   error
 }
 
-func (b *Block) TryHash() *HashResult {
+func NextNonce() string {
 	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nonceValue := rd.Int63()
+	nonce := fmt.Sprintf("%016x", nonceValue)
+	return nonce
+}
+
+func (b *Block) TryHash() *HashResult {
+	return b.HashWith(NextNonce())
+}
+
+func (b *Block) HashWith(nonce string) *HashResult {
+	nonceValue, err := hex.DecodeString(nonce)
+	if err != nil {
+		return &HashResult{
+			Err: err,
+		}
+	}
 	all := make([][]byte, 0)
 	preBytes, err := hex.DecodeString(b.PreHash)
 	if err != nil {
 		return &HashResult{
-			Ok:  false,
 			Err: err,
 		}
 	}
 	merk, err := hex.DecodeString(b.MerkleTreeRoot)
 	if err != nil {
 		return &HashResult{
-			Ok:  false,
 			Err: err,
 		}
 	}
 	all = append(all, Int64ToBytes(b.Timestamp))
 	all = append(all, preBytes)
 	all = append(all, merk)
-	all = append(all, Int64ToBytes(nonceValue))
-	nonce := fmt.Sprintf("%08x", nonceValue)
+	all = append(all, nonceValue)
+
 	if b.Difficulty == "" {
 		return &HashResult{
-			Ok:  false,
 			Err: ErrWrapf("empty block difficulty"),
 		}
 	}
