@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"time"
 )
@@ -11,36 +10,8 @@ import (
 type TxType int32
 
 const (
-	NormalTx           TxType = 0 //普通交易
-	GenesisTx          TxType = 1 //创世交易
-	GenesisCoinCount          = 100
-	GenesisTime               = 1630814880000
-	GenesisDiff               = "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" //60f
-	GenesisPreHash            = "0000000000000000000000000000000000000000000000000000000000000000" //60f
-	GenesisBlockHash          = "00000a53b81a1429fdb26c99a746450da0dcfe7b38b2db403e0d9cb89e74fa09"
-	GenesisBlockNonce         = "0410f4e35d1b266e"
-	DiffTargetSpacing         = 1 * 60                                 //1min 一个区块
-	DiffTargetTimeSpan        = 60 * 60                                // 每60分钟调整一次难度
-	DiffIntervalBlock         = DiffTargetTimeSpan / DiffTargetSpacing //60次以后，调整难度
-
-)
-
-var (
-	//仅仅是为了后续方便编码和测试，实际上
-	GenesisPrivateKeys = [][]byte{{44, 190, 182, 28, 72, 154, 195, 227, 70, 39, 86, 55, 22, 45, 247, 94, 231, 212, 68, 207, 32, 212, 252, 144, 140, 150, 134, 231, 1, 40, 214, 69},
-		{37, 175, 36, 250, 25, 142, 150, 140, 15, 59, 114, 33, 160, 85, 234, 46, 232, 8, 148, 252, 209, 35, 247, 208, 198, 208, 180, 87, 199, 123, 21, 163},
-		{124, 193, 148, 216, 238, 84, 77, 65, 123, 33, 174, 115, 84, 138, 92, 104, 208, 203, 126, 6, 46, 101, 141, 154, 10, 90, 248, 108, 65, 53, 156, 45},
-		{46, 36, 217, 131, 42, 20, 225, 33, 77, 192, 9, 13, 131, 25, 55, 129, 202, 78, 248, 36, 103, 23, 63, 199, 46, 78, 148, 12, 62, 33, 238, 254},
-		{189, 204, 180, 135, 97, 95, 152, 255, 132, 51, 102, 4, 100, 111, 175, 247, 227, 152, 149, 246, 69, 251, 238, 114, 55, 205, 60, 17, 36, 82, 180, 216},
-		{115, 182, 146, 98, 119, 63, 178, 120, 29, 60, 255, 102, 176, 176, 15, 40, 130, 12, 249, 89, 30, 102, 236, 163, 27, 251, 175, 89, 243, 36, 252, 203},
-		{216, 75, 15, 252, 154, 49, 236, 216, 126, 126, 233, 68, 77, 110, 52, 19, 205, 186, 255, 127, 113, 130, 49, 84, 86, 123, 205, 130, 240, 226, 130, 231},
-		{174, 39, 70, 72, 166, 168, 162, 221, 205, 9, 50, 194, 57, 6, 61, 141, 89, 143, 163, 126, 39, 68, 160, 59, 244, 234, 204, 175, 222, 246, 47, 34},
-		{144, 210, 192, 20, 2, 137, 110, 100, 71, 14, 196, 100, 97, 190, 61, 110, 207, 240, 60, 0, 9, 157, 164, 111, 176, 14, 251, 28, 27, 142, 27, 54},
-		{73, 83, 74, 17, 154, 230, 214, 34, 134, 38, 20, 96, 177, 79, 86, 84, 175, 253, 240, 58, 120, 168, 81, 230, 215, 12, 43, 71, 92, 164, 5, 167}}
-
-	Env = &GlobalEnv{UnixTime: func() int64 {
-		return time.Now().Unix()
-	}}
+	NormalTx  TxType = 0 //普通交易
+	GenesisTx TxType = 1 //创世交易
 )
 
 /**
@@ -64,29 +35,6 @@ type Block struct {
 	Difficulty     string
 }
 
-type GlobalEnv struct {
-	UnixTime TimeProvider
-}
-
-type TimeProvider func() int64
-
-type BlockChain struct {
-	Env *GlobalEnv
-	//txs
-	*TxDatabase
-	//utxo
-	UtxoDatabase
-	//key block hash
-	Blocks map[string]*Block
-	//
-	Current *Block
-}
-
-type TxDatabase struct {
-	//key
-	Tx map[string]*Transaction
-}
-
 type Transaction struct {
 	Timestamp int64
 	//交易类型
@@ -100,6 +48,8 @@ type Transaction struct {
 	//Hash 以下为推断字段，仅占位用
 	Hash string
 }
+
+type Script [][]byte
 
 type Input struct {
 	//<sig> <pubKey>
@@ -123,157 +73,7 @@ type Output struct {
 	TxHash string
 }
 
-type Script [][]byte
-
-type Utxo struct {
-	Address string
-	TxHash  string
-	TxIndex int
-	Fee     int64
-}
-
-type UtxoDatabase interface {
-	AddUtxo(u *Utxo)
-	GetUtxo(address string) []*Utxo
-	RemoveUtxo(u *Utxo) error
-}
-
-type InMemUtxoDatabase struct {
-	db map[string][]*Utxo
-}
-
-func NewInMemUtxoDatabase() UtxoDatabase {
-	return &InMemUtxoDatabase{db: make(map[string][]*Utxo)}
-}
-
-func (i *InMemUtxoDatabase) AddUtxo(u *Utxo) {
-	address := u.Address
-	_, ok := i.db[address]
-	if !ok {
-		i.db[address] = make([]*Utxo, 0)
-	}
-	i.db[address] = append(i.db[address], u)
-}
-
-func (i *InMemUtxoDatabase) GetUtxo(address string) []*Utxo {
-	return i.db[address]
-}
-
-func (i *InMemUtxoDatabase) RemoveUtxo(u *Utxo) error {
-	add := u.Address
-	l := i.db[add]
-	m := make([]*Utxo, 0)
-	removed := false
-	for _, it := range l {
-		if it == u {
-			if removed {
-				return ErrWrapf("Already removed %v", u)
-			}
-			removed = true
-		} else {
-			m = append(m, it)
-		}
-	}
-	if !removed {
-		return ErrWrapf("not found utxo %v ", u)
-	}
-	i.db[add] = m
-	return nil
-}
-
-//---------------------- func below --------------------------
-func (c *BlockChain) Size() int {
-	return len(c.Blocks)
-}
-
-//创世
-func Genesis(env *GlobalEnv) *BlockChain {
-	chain := &BlockChain{
-		TxDatabase: &TxDatabase{
-			Tx: make(map[string]*Transaction),
-		},
-		Blocks:       make(map[string]*Block),
-		Env:          env,
-		UtxoDatabase: NewInMemUtxoDatabase(),
-	}
-	block := genesisBlock()
-	e := chain.Append(block)
-	if e != nil {
-		panic(e)
-	}
-	return chain
-}
-
-// 区块链添加一个新的区块，并做简单校验
-func (c *BlockChain) Append(b *Block) error {
-	ec := checkWhenAppend(b)
-	if ec != nil {
-		return ec
-	}
-	_, e := c.Blocks[b.Hash]
-	if e {
-		Log.Errorf("Same Block Hash found! %s ", b.Hash)
-		panic(b.Hash)
-	}
-	c.Blocks[b.Hash] = b
-	c.Current = b
-	//update Transactions
-	for _, t := range b.Tx {
-		_, ok := c.Tx[t.Hash]
-		if ok {
-			Log.Errorf("Same Transaction Hash found!Block %s ", b.Hash)
-			panic(b.Hash)
-		}
-		c.Tx[t.Hash] = t
-	}
-	//update utxo
-	if b.Height != 0 {
-		for idx, t := range b.Tx {
-			for _, i := range t.Inputs {
-				e := c.RemoveUtxo(newUtxo(t, idx, &i.Output))
-				if e != nil {
-					panic(ErrWrap("utxo not exist", e))
-				}
-			}
-		}
-	}
-	for i, t := range b.Tx {
-		for _, o := range t.Outputs {
-			c.AddUtxo(newUtxo(t, i, o))
-		}
-	}
-	return nil
-
-}
-//todo utxo checks
-func checkWhenAppend(b *Block) error {
-	if b.Nonce == "" {
-		return ErrWrapf("Empty nonce in block %v", b.Height)
-	}
-	if len(b.Tx) == 0 {
-		return ErrWrapf("Empty tx in block %v", b.Height)
-	}
-	if b.Hash == "" {
-		return ErrWrapf("Empty hash in block %v", b.Height)
-	}
-	e := b.HashWith(b.Nonce)
-	if !e.Ok {
-		return ErrWrapf("Invalid hash in block %v", b.Height)
-	}
-	if e.Hash != b.Hash {
-		return ErrWrapf("Illegal hash in block %v", b.Height)
-	}
-	return nil
-}
-func newUtxo(t *Transaction, txIdx int, o *Output) *Utxo {
-	return &Utxo{
-		Address: o.Address,
-		TxHash:  t.Hash,
-		TxIndex: txIdx,
-		Fee:     o.Fee,
-	}
-}
-
+// ==================================== func below  ====================================
 func genesisBlock() *Block {
 	b := &Block{
 		Timestamp:    GenesisTime,
@@ -311,50 +111,6 @@ func (b *Block) updateMerk() error {
 	return nil
 }
 
-//新建区块, 只留下Nonce和 Hash待确定
-func (c *BlockChain) NewBlock(tx []*Transaction) (*Block, error) {
-	pre := c.Current
-	preOutputCount := 0
-	for _, t := range pre.Tx {
-		preOutputCount += len(t.Outputs)
-	}
-	b := &Block{
-		Timestamp:    c.Env.UnixTime(),
-		PreHash:      pre.Hash,
-		Tx:           tx,
-		Height:       pre.Height + 1,
-		TxCount:      len(tx),
-		PreTxSum:     pre.PreTxSum + int64(pre.TxCount),
-		PreOutputSum: pre.PreOutputSum + int64(preOutputCount),
-		Difficulty:   c.NextDifficulty(),
-	}
-	err := b.updateMerk()
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-func checkTx(tx []*Transaction) error {
-	l := len(tx)
-	if l < 2 {
-		return ErrWrapf("tx length < 2")
-	}
-	for _, it := range tx {
-		if it.Timestamp == 0 {
-			return ErrWrapf("tx time is 0")
-		}
-		if it.Type != NormalTx {
-			return ErrWrapf("tx should be normal")
-		}
-		if len(it.Extra) > 100 {
-			return ErrWrapf("tx extra len >100")
-		}
-	}
-	return nil
-
-}
-
 func createGenesisTx() []*Transaction {
 	txs := make([]*Transaction, 0)
 	for i, priv := range GenesisPrivateKeys {
@@ -389,7 +145,6 @@ func buildP2PKHOutput(pubKey []byte) *Script {
 	return _output(ripemd160)
 }
 
-//
 func buildP2PKHOutputWithAddress(add string) (*Script, error) {
 	key, err := AddressToRipemd160PubKey(add)
 	if err != nil {
@@ -508,46 +263,7 @@ func (s *Script) append(b []byte) {
 	*s = append(*s, b)
 }
 
-// ==================================== Difficulty ====================================
-func (c *BlockChain) NextDifficulty() string {
-	b := c.Current
-	if b.Height == 0 {
-		return GenesisDiff
-	}
-	//Only change once per interval
-	if (b.Height+1)%DiffIntervalBlock != 0 {
-		return b.Difficulty
-	}
-	var first = b
-	for i := 0; i < DiffIntervalBlock-1; i++ {
-		first = c.Blocks[first.PreHash]
-	}
-	var actualSpan = b.Timestamp - first.Timestamp
-	if actualSpan < DiffTargetTimeSpan/4 {
-		actualSpan = DiffTargetTimeSpan / 4
-	}
-	if actualSpan > DiffTargetTimeSpan*4 {
-		actualSpan = DiffTargetTimeSpan * 4
-	}
-	return diff(b.Difficulty, actualSpan, DiffTargetTimeSpan)
-}
-
-func diff(curDiff string, actualSpan, targetSpan int64) string {
-	////新的难度值 = 旧难度值 * （nActualTimespan/nTargetTimespan）
-	oldDiff, ok := new(big.Int).SetString(curDiff, 16)
-	if !ok {
-		panic(ErrWrapf("invalid hex diff %s", curDiff))
-	}
-	r := new(big.Int)
-	actualSpanB := new(big.Int).SetInt64(actualSpan)
-	targetSpanB := new(big.Int).SetInt64(targetSpan)
-	r.Mul(oldDiff, actualSpanB)
-	r = r.Div(r, targetSpanB)
-	return r.Text(16)
-}
-
 // ==================================== Block Hash ====================================
-
 type HashResult struct {
 	Nonce string
 	Hash  string
