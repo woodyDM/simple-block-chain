@@ -43,7 +43,7 @@ type Transaction struct {
 	Inputs []*Input
 	//输出, 规定：每个Transaction中，一个Address只能有一个Output
 	Outputs []*Output
-	//额外字段，限制长度为 <=100bytes,可以作为备注等
+	//额外字段，限制长度为 <= ExtraLen ,可以作为备注等
 	Extra []byte
 	//Hash 以下为推断字段，仅占位用
 	Hash string

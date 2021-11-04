@@ -16,6 +16,8 @@ const (
 	LenRipemd160      = 20
 )
 
+
+
 type Wallet struct {
 	priv *ecdsa.PrivateKey
 }
@@ -116,4 +118,27 @@ func NewWallet() (*Wallet, error) {
 		return nil, ErrWrap("Wallet error", err)
 	}
 	return &Wallet{priv: privateKey}, nil
+}
+
+func (a *Wallet) Transform(p *TxPool, address string, fee int64, extra string) error {
+	extraB := []byte(extra)
+	if len(extraB) > ExtraLen {
+		return ErrWrapf("Extra len exceed max len")
+	}
+	_, e := AddressToRipemd160PubKey(address)
+	if e != nil {
+		return ErrWrap("Invalid address", e)
+	}
+	if fee <= 0 {
+		return ErrWrapf("Invalid fee %d", fee)
+	}
+	fromAdd := a.Address()
+	req := TxRequest{
+		From:  fromAdd,
+		To:    address,
+		Fee:   fee,
+		Extra: extra,
+		w:     a,
+	}
+	return p.Transform(&req)
 }

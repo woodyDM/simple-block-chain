@@ -36,6 +36,7 @@ type UtxoDatabase interface {
 	AddUtxo(u *Utxo)
 	GetUtxo(address string) []*Utxo
 	RemoveUtxo(u *Utxo) error
+	Clear()
 }
 
 type InMemUtxoDatabase struct {
@@ -81,6 +82,10 @@ func (i *InMemUtxoDatabase) RemoveUtxo(u *Utxo) error {
 	}
 	i.db[add] = m
 	return nil
+}
+
+func (i *InMemUtxoDatabase) Clear() {
+	i.db = make(map[string][]*Utxo)
 }
 
 func newUtxo(t *Transaction, txIdx int, o *Output) *Utxo {
@@ -237,4 +242,9 @@ func diff(curDiff string, actualSpan, targetSpan int64) string {
 	r.Mul(oldDiff, actualSpanB)
 	r = r.Div(r, targetSpanB)
 	return r.Text(16)
+}
+
+func (c *BlockChain) OnTx(tx TxRequest) {
+	Log.Info("chain receive ", tx)
+
 }
