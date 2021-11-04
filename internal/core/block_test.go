@@ -15,6 +15,14 @@ var (
 	MockTimeInterval = 2000
 )
 
+
+func MockTime0(i int64) func() int64 {
+	return func() int64 {
+		i += int64(MockTimeInterval)
+		return i
+	}
+}
+
 func MockTime() func() int64 {
 	var i int64 = GenesisTime
 	return func() int64 {
@@ -138,8 +146,8 @@ func TestInput_CalHash(t *testing.T) {
 	}
 
 	input := &Input{
-		Script: *ins,
-		Output: out,
+		Script: ins,
+		Output: &out,
 	}
 
 	inScriptSha := Sha256([]byte{OpPushData, 1, 2, 3, 4, 5, 6})

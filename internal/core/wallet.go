@@ -16,8 +16,6 @@ const (
 	LenRipemd160      = 20
 )
 
-
-
 type Wallet struct {
 	priv *ecdsa.PrivateKey
 }
@@ -49,6 +47,12 @@ func (a *Wallet) Sign(msg []byte) ([]byte, error) {
 		return nil, ErrWrap("sign error", err)
 	}
 	return append(r.Bytes(), s.Bytes()...), nil
+}
+
+func VerifyScript(txHash string, in, out *Script) error {
+	vm := NewVm(*ConcatScript(in, out))
+	vm.SetEnv(VMEnvHash, []byte(txHash))
+	return vm.Exec()
 }
 
 //使用pubKey 校验 msgHash 的签名是否正确
@@ -120,25 +124,14 @@ func NewWallet() (*Wallet, error) {
 	return &Wallet{priv: privateKey}, nil
 }
 
-func (a *Wallet) Transform(p *TxPool, address string, fee int64, extra string) error {
-	extraB := []byte(extra)
-	if len(extraB) > ExtraLen {
-		return ErrWrapf("Extra len exceed max len")
-	}
-	_, e := AddressToRipemd160PubKey(address)
-	if e != nil {
-		return ErrWrap("Invalid address", e)
-	}
-	if fee <= 0 {
-		return ErrWrapf("Invalid fee %d", fee)
-	}
-	fromAdd := a.Address()
+func (a *Wallet) Transform(p *TxPool, address string, fee int64, extra string) *TxResponse {
 	req := TxRequest{
-		From:  fromAdd,
+		From:  a.Address(),
 		To:    address,
 		Fee:   fee,
 		Extra: extra,
 		w:     a,
 	}
+	Log.Info("Wallet submit transform from ", a.Address(), " to ", address, " with fee ", fee, " and extra", extra)
 	return p.Transform(&req)
 }

@@ -53,9 +53,9 @@ type Script [][]byte
 
 type Input struct {
 	//<sig> <pubKey>
-	Script Script
+	Script *Script
 	//之前某个 tx 的 Output
-	Output Output
+	Output *Output
 }
 
 type Output struct {
@@ -182,7 +182,7 @@ func buildP2PKHInput(txHash []byte, w *Wallet) (*Script, error) {
 func (t *Transaction) UpdateHash() error {
 	all := make([][]byte, 0)
 	all = append(all, Int64ToBytes(t.Timestamp))
-	all = append(all, Int64ToBytes(int64(int32(t.Type))))
+	all = append(all, Int64ToBytes(int64(t.Type)))
 	for _, in := range t.Inputs {
 		if inHash, err := in.CalHash(); err != nil {
 			return err

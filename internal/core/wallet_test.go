@@ -23,7 +23,7 @@ func TestNewAccount(t *testing.T) {
 func TestWallet_Sign_Verify(t *testing.T) {
 	msg := "Key 对 txCopy.ID 进行签名。一个 ECDSA 签名就是一对数字，我们对这对数字连接起来，并存储在输入的 Signature 字段"
 
-	wallet, _ := NewWallet()
+	wallet := getTestWallet()
 	sign, err := wallet.Sign([]byte(msg))
 	if err != nil {
 		t.Fatal(err)
@@ -67,14 +67,18 @@ func TestAddressToRipemd160PubKey(t *testing.T) {
 
 func TestAddressToRipemd160PubKey_WithError(t *testing.T) {
 	w := getTestWallet()
-	b:=[]byte(w.Address())
+	b := []byte(w.Address())
 	b[0] = 1
 	_, err := AddressToRipemd160PubKey(string(b))
-	if !strings.Contains(err.Error(),"invalid base58 string") {
+	if !strings.Contains(err.Error(), "invalid base58 string") {
 		t.Fatal(err)
 	}
 }
 
 func getTestWallet() *Wallet {
 	return RestoreWallet(GenesisPrivateKeys[0])
+}
+
+func getTestWallet2() *Wallet {
+	return RestoreWallet(GenesisPrivateKeys[1])
 }

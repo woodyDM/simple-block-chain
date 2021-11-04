@@ -145,7 +145,7 @@ func (c *BlockChain) Append(b *Block) error {
 	if b.Height != 0 {
 		for idx, t := range b.Tx {
 			for _, i := range t.Inputs {
-				e := c.RemoveUtxo(newUtxo(t, idx, &i.Output))
+				e := c.RemoveUtxo(newUtxo(t, idx, i.Output))
 				if e != nil {
 					panic(ErrWrap("utxo not exist", e))
 				}
@@ -158,7 +158,6 @@ func (c *BlockChain) Append(b *Block) error {
 		}
 	}
 	return nil
-
 }
 
 //todo utxo checks

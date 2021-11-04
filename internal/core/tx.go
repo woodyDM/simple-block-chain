@@ -6,6 +6,7 @@ type TxPool struct {
 	tx       []*Transaction
 	txReqCh  chan *TxRequest
 	txRespCh chan *TxResponse
+	txCh     chan *Transaction
 	endl     chan bool
 }
 
@@ -22,6 +23,12 @@ type TxResponse struct {
 	err error
 }
 
+func NewErrTxResponse(err error) *TxResponse {
+	return &TxResponse{
+		err: err,
+	}
+}
+
 func NewTxPool(c *BlockChain) *TxPool {
 	pool := TxPool{
 		chain:    c,
@@ -29,6 +36,7 @@ func NewTxPool(c *BlockChain) *TxPool {
 		tx:       make([]*Transaction, 0),
 		txReqCh:  make(chan *TxRequest),
 		txRespCh: make(chan *TxResponse),
+		txCh:     make(chan *Transaction),
 		endl:     make(chan bool),
 	}
 	go pool.start()
@@ -52,13 +60,23 @@ func (p *TxPool) start() {
 }
 
 //todo transform when stop
-func (p *TxPool) Transform(tx *TxRequest) error {
+func (p *TxPool) Transform(tx *TxRequest) *TxResponse {
+	extraB := []byte(tx.Extra)
+	if len(extraB) > ExtraLen {
+		return NewErrTxResponse(ErrWrapf("Extra len exceed max len"))
+	}
+	_, e := AddressToRipemd160PubKey(tx.w.Address())
+	if e != nil {
+		return NewErrTxResponse(ErrWrap("Invalid address", e))
+	}
+	fee := tx.Fee
+	if fee <= 0 {
+		return NewErrTxResponse(ErrWrapf("Invalid fee %d", fee))
+	}
 	p.txReqCh <- tx
-	resp := <-p.txRespCh
-	return resp.err
+	return <-p.txRespCh
 }
 
-//todo in some go routine
 func (p *TxPool) transform0(tx *TxRequest) *TxResponse {
 	valid := p.chain.GetUtxo(tx.From)
 	used := p.usedUtxo.GetUtxo(tx.From)
@@ -66,17 +84,21 @@ func (p *TxPool) transform0(tx *TxRequest) *TxResponse {
 	thisUtxo := pickUtxo(unused, tx.Fee)
 	if thisUtxo == nil {
 		Log.Info("Not enough utxo for ", tx)
-		return &TxResponse{
-			err: ErrWrapf("No enough utxo for %s", tx.From),
-		}
+		return NewErrTxResponse(ErrWrapf("No enough utxo for %s", tx.From))
 	} else {
 		transaction, err := p.createNormalTx(thisUtxo, tx)
 		if err != nil {
-			return &TxResponse{
-				err: err,
-			}
+			return NewErrTxResponse(err)
 		}
-		//todo update chain and txpool
+		err = transaction.UpdateHash()
+		if err != nil {
+			return NewErrTxResponse(err)
+		}
+		p.tx = append(p.tx, transaction)
+		for _, it := range unused {
+			p.usedUtxo.AddUtxo(it)
+		}
+		Log.Info("TxPool put transaction ", transaction.Hash, " to pool. Request is ", tx)
 		return &TxResponse{
 			tx:  transaction,
 			err: nil,
@@ -97,12 +119,11 @@ func pickUtxo(uxto []*Utxo, fee int64) []*Utxo {
 	return nil
 }
 
+//使用utxo 构建 交易
 func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, error) {
 	trans := &Transaction{
 		Timestamp: p.chain.Env.UnixTime(),
 		Type:      NormalTx,
-		Inputs:    nil,
-		Outputs:   nil,
 		Extra:     []byte(tx.Extra),
 	}
 	w := tx.w
@@ -123,9 +144,13 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 			if err != nil {
 				return nil, ErrWrap("can't create tx", err)
 			}
+			err = VerifyScript(inTx.Hash, script, output.Script)
+			if err != nil {
+				return nil, ErrWrap("script verify fail", err)
+			}
 			in := &Input{
-				Script: *script,
-				Output: *output,
+				Script: script,
+				Output: output,
 			}
 			inputs = append(inputs, in)
 			total += output.Fee
@@ -139,7 +164,7 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 	}
 	outputs := make([]*Output, 0)
 	if left > 0 {
-		//create bonus output fo
+		//create left output
 		o1 := &Output{
 			Fee:     left,
 			Script:  buildP2PKHOutput(w.PublicKey()),
