@@ -113,13 +113,13 @@ func (b *Block) updateMerk() error {
 
 func createGenesisTx() []*Transaction {
 	txs := make([]*Transaction, 0)
-	for i, priv := range GenesisPrivateKeys {
+	for _, priv := range GenesisPrivateKeys {
 		outs := make([]*Output, 0)
 		account := RestoreWallet(priv)
 		out := &Output{
 			Fee:     GenesisCoinCount,
 			Script:  buildP2PKHOutput(account.PublicKey()),
-			TxIndex: i,
+			TxIndex: 0,
 			Address: account.Address(),
 		}
 		outs = append(outs, out)
@@ -280,6 +280,15 @@ func NextNonce() string {
 
 func (b *Block) TryHash() *HashResult {
 	return b.HashWith(NextNonce())
+}
+
+func (b *Block) UpdateHash(r *HashResult) {
+	if r.Ok {
+		b.Nonce = r.Nonce
+		b.Hash = r.Hash
+	} else {
+		panic("Should not use this hash result ")
+	}
 }
 
 func (b *Block) HashWith(nonce string) *HashResult {

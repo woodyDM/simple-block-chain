@@ -79,6 +79,10 @@ func getTestWallet() *Wallet {
 	return RestoreWallet(GenesisPrivateKeys[0])
 }
 
+func getTestWallet_(i int) *Wallet {
+	return RestoreWallet(GenesisPrivateKeys[i])
+}
+
 func getTestWallet2() *Wallet {
 	return RestoreWallet(GenesisPrivateKeys[1])
 }

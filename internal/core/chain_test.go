@@ -18,7 +18,7 @@ func TestGenesis(t *testing.T) {
 		if o.TxHash!=utx.TxHash {
 			t.Fatal("Tx hash")
 		}
-		if o.TxIndex!=utx.TxIndex{
+		if o.TxIndex!=utx.TxOutputIndex {
 			t.Fatal("txidx ")
 		}
 		if o.TxHash!= hash {
@@ -59,10 +59,10 @@ func TestMemUtxoDb(t *testing.T) {
 		t.Fatal("0")
 	}
 	u := &Utxo{
-		Address: add,
-		TxHash:  "111",
-		TxIndex: 0,
-		Fee:     100,
+		Address:       add,
+		TxHash:        "111",
+		TxOutputIndex: 0,
+		Fee:           100,
 	}
 	db.AddUtxo(u)
 
@@ -84,18 +84,18 @@ func TestMemUtxoDb_withNotExistUtxo(t *testing.T) {
 	add := getTestWallet().Address()
 
 	u := &Utxo{
-		Address: add,
-		TxHash:  "111",
-		TxIndex: 0,
-		Fee:     100,
+		Address:       add,
+		TxHash:        "111",
+		TxOutputIndex: 0,
+		Fee:           100,
 	}
 	db.AddUtxo(u)
 
 	u2 := &Utxo{
-		Address: add,
-		TxHash:  "1111",
-		TxIndex: 0,
-		Fee:     100,
+		Address:       add,
+		TxHash:        "1111",
+		TxOutputIndex: 0,
+		Fee:           100,
 	}
 
 	err := db.RemoveUtxo(u2)

@@ -1,13 +1,13 @@
 package core
 
 type TxPool struct {
-	chain    *BlockChain
-	usedUtxo UtxoDatabase
-	tx       []*Transaction
-	txReqCh  chan *TxRequest
-	txRespCh chan *TxResponse
-	txCh     chan *Transaction
-	endl     chan bool
+	chain     *BlockChain
+	usedUtxo  UtxoDatabase
+	txReqCh   chan *TxRequest
+	txRespCh  chan *TxResponse
+	txCh      chan *Transaction
+	txBlockCh chan *Block
+	endl      chan bool
 }
 
 type TxRequest struct {
@@ -31,13 +31,13 @@ func NewErrTxResponse(err error) *TxResponse {
 
 func NewTxPool(c *BlockChain) *TxPool {
 	pool := TxPool{
-		chain:    c,
-		usedUtxo: NewInMemUtxoDatabase(),
-		tx:       make([]*Transaction, 0),
-		txReqCh:  make(chan *TxRequest),
-		txRespCh: make(chan *TxResponse),
-		txCh:     make(chan *Transaction),
-		endl:     make(chan bool),
+		chain:     c,
+		usedUtxo:  NewInMemUtxoDatabase(),
+		txReqCh:   make(chan *TxRequest),
+		txRespCh:  make(chan *TxResponse),
+		txCh:      make(chan *Transaction, 100),
+		txBlockCh: make(chan *Block, 0),
+		endl:      make(chan bool),
 	}
 	go pool.start()
 	return &pool
@@ -54,7 +54,13 @@ func (p *TxPool) start() {
 			Log.Info("Tx pool stop")
 			return
 		case req := <-p.txReqCh:
-			p.txRespCh <- p.transform0(req)
+			resp := p.transform0(req)
+			if resp.err == nil {
+				p.txCh <- resp.tx
+			}
+			p.txRespCh <- resp
+		case block := <-p.txBlockCh:
+			p.receiveBlock(block)
 		}
 	}
 }
@@ -94,7 +100,6 @@ func (p *TxPool) transform0(tx *TxRequest) *TxResponse {
 		if err != nil {
 			return NewErrTxResponse(err)
 		}
-		p.tx = append(p.tx, transaction)
 		for _, it := range unused {
 			p.usedUtxo.AddUtxo(it)
 		}
@@ -135,11 +140,11 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 			return nil, ErrWrapf("Transaction %s not found !", it.TxHash)
 		} else {
 			i := len(inTx.Outputs)
-			if i <= it.TxIndex {
-				return nil, ErrWrapf("Transaction %s out of index %d of %d", it.TxHash, it.TxIndex, i)
+			if i <= it.TxOutputIndex {
+				return nil, ErrWrapf("Transaction %s out of index [%d] of total [%d]", it.TxHash, it.TxOutputIndex, i)
 			}
 			//create input
-			output := inTx.Outputs[it.TxIndex]
+			output := inTx.Outputs[it.TxOutputIndex]
 			script, err := buildP2PKHInput([]byte(inTx.Hash), tx.w)
 			if err != nil {
 				return nil, ErrWrap("can't create tx", err)
@@ -187,6 +192,11 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 	}
 	trans.Outputs = outputs
 	return trans, nil
+}
+
+func (p *TxPool) receiveBlock(block *Block) {
+	p.usedUtxo.Clear()
+
 }
 
 func filterUsedUtxo(valid []*Utxo, used []*Utxo) []*Utxo {

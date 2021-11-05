@@ -95,9 +95,6 @@ func TestCreateNormalTx(t *testing.T) {
 	if len(utxo) != 1 {
 		t.Fatal("should use one")
 	}
-	if len(pool.tx) != 1 {
-		t.Fatal("should create 1 tx")
-	}
 }
 
 func TestCreateNormalTx2(t *testing.T) {
@@ -161,9 +158,9 @@ func TestCreateNormalTxErr(t *testing.T) {
 
 func uxto(add, txHash string, idx int, fee int64) *Utxo {
 	return &Utxo{
-		Address: add,
-		TxHash:  txHash,
-		TxIndex: idx,
-		Fee:     fee,
+		Address:       add,
+		TxHash:        txHash,
+		TxOutputIndex: idx,
+		Fee:           fee,
 	}
 }

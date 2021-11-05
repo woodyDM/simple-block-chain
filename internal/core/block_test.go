@@ -209,7 +209,7 @@ func TestGenesisBlock(t *testing.T) {
 	}
 }
 
-func __TestGenesisHashCal(t *testing.T) {
+func TestGenesisHashCal(t *testing.T) {
 	block:=genesisBlock()
 	var  r *HashResult
 	for  {

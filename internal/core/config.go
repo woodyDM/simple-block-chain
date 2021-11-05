@@ -7,12 +7,13 @@ const (
 	GenesisTime        = 1630814880000
 	GenesisDiff        = "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" //60f
 	GenesisPreHash     = "0000000000000000000000000000000000000000000000000000000000000000" //60f
-	GenesisBlockHash   = "00000a53b81a1429fdb26c99a746450da0dcfe7b38b2db403e0d9cb89e74fa09"
-	GenesisBlockNonce  = "0410f4e35d1b266e"
+	GenesisBlockHash   = "000001dc924c8b12327f467895eeacb19e2db2fe0e2aba4acd261baaa94ef5cc"
+	GenesisBlockNonce  = "4ee1e7ad6595faec"
 	DiffTargetSpacing  = 1 * 60                                 //1min 一个区块
 	DiffTargetTimeSpan = 60 * 60                                // 每60分钟调整一次难度
 	DiffIntervalBlock  = DiffTargetTimeSpan / DiffTargetSpacing //60次以后，调整难度
 	ExtraLen           = 64
+	TxPerBlock         = 5
 )
 
 var (

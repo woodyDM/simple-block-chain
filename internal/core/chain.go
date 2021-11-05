@@ -26,10 +26,10 @@ type TxDatabase struct {
 }
 
 type Utxo struct {
-	Address string
-	TxHash  string
-	TxIndex int
-	Fee     int64
+	Address       string
+	TxHash        string
+	TxOutputIndex int //output在 tx中的下标
+	Fee           int64
 }
 
 type UtxoDatabase interface {
@@ -64,11 +64,10 @@ func (i *InMemUtxoDatabase) GetUtxo(address string) []*Utxo {
 
 func (i *InMemUtxoDatabase) RemoveUtxo(u *Utxo) error {
 	add := u.Address
-	l := i.db[add]
 	m := make([]*Utxo, 0)
 	removed := false
-	for _, it := range l {
-		if it == u {
+	for _, it := range i.db[add] {
+		if *it == *u {
 			if removed {
 				return ErrWrapf("Already removed %v", u)
 			}
@@ -88,12 +87,12 @@ func (i *InMemUtxoDatabase) Clear() {
 	i.db = make(map[string][]*Utxo)
 }
 
-func newUtxo(t *Transaction, txIdx int, o *Output) *Utxo {
+func newUtxo(t *Transaction, o *Output) *Utxo {
 	return &Utxo{
-		Address: o.Address,
-		TxHash:  t.Hash,
-		TxIndex: txIdx,
-		Fee:     o.Fee,
+		Address:       o.Address,
+		TxHash:        t.Hash,
+		TxOutputIndex: o.TxIndex,
+		Fee:           o.Fee,
 	}
 }
 
@@ -143,18 +142,18 @@ func (c *BlockChain) Append(b *Block) error {
 	}
 	//update utxo
 	if b.Height != 0 {
-		for idx, t := range b.Tx {
+		for _, t := range b.Tx {
 			for _, i := range t.Inputs {
-				e := c.RemoveUtxo(newUtxo(t, idx, i.Output))
+				e := c.RemoveUtxo(newUtxo(t, i.Output))
 				if e != nil {
 					panic(ErrWrap("utxo not exist", e))
 				}
 			}
 		}
 	}
-	for i, t := range b.Tx {
+	for _, t := range b.Tx {
 		for _, o := range t.Outputs {
-			c.AddUtxo(newUtxo(t, i, o))
+			c.AddUtxo(newUtxo(t, o))
 		}
 	}
 	return nil
