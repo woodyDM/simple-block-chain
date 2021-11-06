@@ -187,7 +187,7 @@ func TestScript_VM(t *testing.T) {
 
 func TestGenesisBlock(t *testing.T) {
 	block := genesisBlock()
-	merk := "ef551a513148cf836ba134ff59492806bdc5d0256816210630694f1634fdfc25"
+	merk := "0c704991b4ba0f4a3792d9f024efeb0c52ff9c7fa78fff8890a198cb98706966"
 	if block.MerkleTreeRoot != merk {
 		t.Fatal("merk fail")
 	}
@@ -209,7 +209,7 @@ func TestGenesisBlock(t *testing.T) {
 	}
 }
 
-func TestGenesisHashCal(t *testing.T) {
+func __TestGenesisHashCal(t *testing.T) {
 	block:=genesisBlock()
 	var  r *HashResult
 	for  {

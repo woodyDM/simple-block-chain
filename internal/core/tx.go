@@ -89,7 +89,7 @@ func (p *TxPool) transform0(tx *TxRequest) *TxResponse {
 	unused := filterUsedUtxo(valid, used)
 	thisUtxo := pickUtxo(unused, tx.Fee)
 	if thisUtxo == nil {
-		Log.Info("Not enough utxo for ", tx)
+		Log.Debug("Not enough utxo for ", tx)
 		return NewErrTxResponse(ErrWrapf("No enough utxo for %s", tx.From))
 	} else {
 		transaction, err := p.createNormalTx(thisUtxo, tx)
@@ -195,8 +195,16 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 }
 
 func (p *TxPool) receiveBlock(block *Block) {
-	p.usedUtxo.Clear()
-
+	for _, o := range block.Tx {
+		for _, i := range o.Inputs {
+			out := i.Output
+			e := p.usedUtxo.RemoveUtxo(newUtxo(out))
+			if e != nil {
+				panic(ErrWrapf("Not found used utxo %v", out))
+			}
+		}
+	}
+	Log.Info("Remove used utxos ")
 }
 
 func filterUsedUtxo(valid []*Utxo, used []*Utxo) []*Utxo {

@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 
 func TestGenesis(t *testing.T) {
@@ -69,7 +72,12 @@ func TestMemUtxoDb(t *testing.T) {
 	if len(db.GetUtxo(add)) != 1 {
 		t.Fatal()
 	}
-	err := db.RemoveUtxo(u)
+	err := db.RemoveUtxo(&Utxo{
+		Address:       add,
+		TxHash:        "111",
+		TxOutputIndex: 0,
+		Fee:           100,
+	})
 	if err != nil {
 		t.Fatal()
 	}
@@ -103,4 +111,12 @@ func TestMemUtxoDb_withNotExistUtxo(t *testing.T) {
 		t.Fatal()
 	}
 
+}
+
+func TestF(t *testing.T) {
+	s:="3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	v:=fmt.Sprintf("%064s",s)
+	if v!="0003ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"{
+		t.Fatal("")
+	}
 }

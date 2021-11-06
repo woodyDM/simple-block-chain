@@ -1,6 +1,10 @@
 package core
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+	"unicode/utf8"
+)
 
 type TimeProvider func() int64
 
@@ -87,10 +91,10 @@ func (i *InMemUtxoDatabase) Clear() {
 	i.db = make(map[string][]*Utxo)
 }
 
-func newUtxo(t *Transaction, o *Output) *Utxo {
+func newUtxo(o *Output) *Utxo {
 	return &Utxo{
 		Address:       o.Address,
-		TxHash:        t.Hash,
+		TxHash:        o.TxHash,
 		TxOutputIndex: o.TxIndex,
 		Fee:           o.Fee,
 	}
@@ -144,7 +148,7 @@ func (c *BlockChain) Append(b *Block) error {
 	if b.Height != 0 {
 		for _, t := range b.Tx {
 			for _, i := range t.Inputs {
-				e := c.RemoveUtxo(newUtxo(t, i.Output))
+				e := c.RemoveUtxo(newUtxo(i.Output))
 				if e != nil {
 					panic(ErrWrap("utxo not exist", e))
 				}
@@ -153,7 +157,7 @@ func (c *BlockChain) Append(b *Block) error {
 	}
 	for _, t := range b.Tx {
 		for _, o := range t.Outputs {
-			c.AddUtxo(newUtxo(t, o))
+			c.AddUtxo(newUtxo(o))
 		}
 	}
 	return nil
@@ -215,17 +219,22 @@ func (c *BlockChain) NextDifficulty() string {
 		return b.Difficulty
 	}
 	var first = b
-	for i := 0; i < DiffIntervalBlock-1; i++ {
+	for i := 0; i < DiffIntervalBlock-2; i++ {
 		first = c.Blocks[first.PreHash]
 	}
-	var actualSpan = b.Timestamp - first.Timestamp
+	var actualSpan = b.Timestamp - first.Timestamp //seconds
 	if actualSpan < DiffTargetTimeSpan/4 {
 		actualSpan = DiffTargetTimeSpan / 4
 	}
 	if actualSpan > DiffTargetTimeSpan*4 {
 		actualSpan = DiffTargetTimeSpan * 4
 	}
-	return diff(b.Difficulty, actualSpan, DiffTargetTimeSpan)
+	s := diff(b.Difficulty, actualSpan, DiffTargetTimeSpan) // seconds
+	newDiff := fmt.Sprintf("%064s", s)
+	if utf8.RuneCountInString(newDiff) != 64 {
+		panic(fmt.Errorf("Invalid diff %s ", newDiff))
+	}
+	return newDiff
 }
 
 func diff(curDiff string, actualSpan, targetSpan int64) string {
@@ -240,9 +249,5 @@ func diff(curDiff string, actualSpan, targetSpan int64) string {
 	r.Mul(oldDiff, actualSpanB)
 	r = r.Div(r, targetSpanB)
 	return r.Text(16)
-}
-
-func (c *BlockChain) OnTx(tx TxRequest) {
-	Log.Info("chain receive ", tx)
 
 }

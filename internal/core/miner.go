@@ -27,7 +27,7 @@ func (m *Miner) Start() {
 func (m *Miner) handleNewTransaction(tx *Transaction) {
 	m.tx = append(m.tx, tx)
 	l := len(m.tx)
-	if l < 5 {
+	if l < 3 {
 		Log.Debug("miner hold tx Len  ", l, " new tx:", tx)
 		return
 	}
@@ -47,7 +47,7 @@ func (m *Miner) handleNewTransaction(tx *Transaction) {
 		}
 	}
 	newBlock.UpdateHash(hash)
-	Log.Info("New hash found for block ", newBlock.Height, " with hash "+newBlock.Hash)
+	Log.Info("============ >>  New  block [", newBlock.Height, "] with hash "+newBlock.Hash  +" << ==========")
 	err = m.p.chain.Append(newBlock)
 	if err != nil {
 		Log.Error("Error when append to chain ", err)
