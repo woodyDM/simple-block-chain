@@ -46,7 +46,8 @@ type Transaction struct {
 	//额外字段，限制长度为 <= ExtraLen ,可以作为备注等
 	Extra []byte
 	//Hash 以下为推断字段，仅占位用
-	Hash string
+	Hash      string
+	BlockHash string
 }
 
 type Script [][]byte

@@ -4,13 +4,14 @@ import "time"
 
 const (
 	GenesisCoinCount   = 100
+	CoinBaseCount      = 50
 	GenesisTime        = 1630814880000
 	GenesisDiff        = "000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" //60f
 	GenesisPreHash     = "0000000000000000000000000000000000000000000000000000000000000000" //60f
 	GenesisBlockHash   = "000001dc924c8b12327f467895eeacb19e2db2fe0e2aba4acd261baaa94ef5cc"
 	GenesisBlockNonce  = "4ee1e7ad6595faec"
-	DiffTargetSpacing  = 1 * 60                          //1min 一个区块
-	DiffTargetTimeSpan = 30 * 60                       // 每30分钟调整一次难度
+	DiffTargetSpacing  = 1 * 60                                 //1min 一个区块
+	DiffTargetTimeSpan = 30 * 60                                // 每30分钟调整一次难度
 	DiffIntervalBlock  = DiffTargetTimeSpan / DiffTargetSpacing //30次以后，调整难度
 	ExtraLen           = 64
 	TxPerBlock         = 5

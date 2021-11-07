@@ -16,10 +16,13 @@ type BlockChain struct {
 	Env *GlobalEnv
 	//txs
 	*TxDatabase
+
 	//utxo
 	UtxoDatabase
 	//key block hash
 	Blocks map[string]*Block
+	//key block height
+	BlockHeights map[uint64]*Block
 	//
 	Current *Block
 }
@@ -111,6 +114,7 @@ func Genesis(env *GlobalEnv) *BlockChain {
 			Tx: make(map[string]*Transaction),
 		},
 		Blocks:       make(map[string]*Block),
+		BlockHeights: make(map[uint64]*Block),
 		Env:          env,
 		UtxoDatabase: NewInMemUtxoDatabase(),
 	}
@@ -135,6 +139,13 @@ func (c *BlockChain) Append(b *Block) error {
 	}
 	c.Blocks[b.Hash] = b
 	c.Current = b
+	//set block heights map
+	_, ex := c.BlockHeights[b.Height]
+	if ex {
+		Log.Errorf("Same block height found! %d", b.Height)
+		panic(b.Height)
+	}
+	c.BlockHeights[b.Height] = b
 	//update Transactions
 	for _, t := range b.Tx {
 		_, ok := c.Tx[t.Hash]
@@ -159,6 +170,10 @@ func (c *BlockChain) Append(b *Block) error {
 		for _, o := range t.Outputs {
 			c.AddUtxo(newUtxo(o))
 		}
+	}
+	//set tx block hash
+	for _, t := range b.Tx {
+		t.BlockHash = b.Hash
 	}
 	return nil
 }
