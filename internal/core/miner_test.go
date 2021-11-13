@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func __TestNewMiner(t *testing.T) {
+func TestNewMiner(t *testing.T) {
 
 	pool := NewTxPool(Genesis(Env))
 	NewMiner(pool,getTestWallet_(9))
@@ -28,12 +28,4 @@ func __TestNewMiner(t *testing.T) {
 	}
 
 }
-func next(n int) int {
-	n = n + 1
-	if n == len(GenesisPrivateKeys) {
-		return 0
-	} else {
-		return n
-	}
 
-}
