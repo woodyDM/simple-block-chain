@@ -1,4 +1,4 @@
-module simple-block-chain
+module github.com/woodyDM/simple-block-chain
 
 go 1.14
 

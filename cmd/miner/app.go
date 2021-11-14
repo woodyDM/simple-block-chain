@@ -1,7 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/woodyDM/simple-block-chain/internal/core"
+)
 
 func main() {
-	fmt.Println("ok")
+	fmt.Println(core.GenesisBlockHash)
+
 }
