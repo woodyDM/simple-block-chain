@@ -43,7 +43,6 @@ type UtxoDatabase interface {
 	AddUtxo(u *Utxo)
 	GetUtxo(address string) []*Utxo
 	RemoveUtxo(u *Utxo) error
-	Clear()
 }
 
 type InMemUtxoDatabase struct {
@@ -88,10 +87,6 @@ func (i *InMemUtxoDatabase) RemoveUtxo(u *Utxo) error {
 	}
 	i.db[add] = m
 	return nil
-}
-
-func (i *InMemUtxoDatabase) Clear() {
-	i.db = make(map[string][]*Utxo)
 }
 
 func newUtxo(o *Output) *Utxo {

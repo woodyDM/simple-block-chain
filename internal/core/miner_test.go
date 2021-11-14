@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestNewMiner(t *testing.T) {
+func __TestNewMiner(t *testing.T) {
 
 	pool := NewTxPool(Genesis(Env))
 	NewMiner(pool,getTestWallet_(9))
