@@ -1,0 +1,9 @@
+{
+  "prod":false,
+  "port":8080,
+  "sqlUrl": "root:123456@tcp(127.0.0.1:3306)/test?charset=utf8&parseTime=True&loc=Local",
+  "redisPass":"123456" ,
+  "redisHost":"localhost",
+  "redisPort":"6379",
+  "domain":"yourdomain"
+}

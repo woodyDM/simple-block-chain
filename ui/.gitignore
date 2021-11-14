@@ -1,24 +1,16 @@
-.idea
-*.exe
-cmd/server/miner
-
-*.iml
-*.log
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
 /node_modules
 /.pnp
 .pnp.js
-/resources
+
 # testing
 /coverage
-/cmd/server/server
 
 # production
 /build
-static
+.eslintcache
 # misc
 .DS_Store
 .env.local
@@ -29,5 +21,3 @@ static
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-

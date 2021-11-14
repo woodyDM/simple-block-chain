@@ -1,0 +1,9 @@
+{
+  "prod":true,
+  "port":80,
+  "sqlUrl": "name:pass@tcp(mysql.infra:3306)/aa?charset=utf8&parseTime=True&loc=Local",
+  "redisPass":"123456" ,
+  "redisHost":"redis.infra",
+  "redisPort":"6379",
+  "domain":"yourdomain"
+}
