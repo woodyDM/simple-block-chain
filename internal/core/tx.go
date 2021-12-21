@@ -1,7 +1,7 @@
 package core
 
 type TxPool struct {
-	chain     *BlockChain
+	Chain     *BlockChain
 	usedUtxo  UtxoDatabase
 	txReqCh   chan *TxRequest
 	txRespCh  chan *TxResponse
@@ -31,7 +31,7 @@ func NewErrTxResponse(err error) *TxResponse {
 
 func NewTxPool(c *BlockChain) *TxPool {
 	pool := TxPool{
-		chain:     c,
+		Chain:     c,
 		usedUtxo:  NewInMemUtxoDatabase(),
 		txReqCh:   make(chan *TxRequest),
 		txRespCh:  make(chan *TxResponse),
@@ -84,7 +84,7 @@ func (p *TxPool) Transform(tx *TxRequest) *TxResponse {
 }
 
 func (p *TxPool) transform0(tx *TxRequest) *TxResponse {
-	valid := p.chain.GetUtxo(tx.From)
+	valid := p.Chain.GetUtxo(tx.From)
 	used := p.usedUtxo.GetUtxo(tx.From)
 	unused := filterUsedUtxo(valid, used)
 	thisUtxo := pickUtxo(unused, tx.Fee)
@@ -127,7 +127,7 @@ func pickUtxo(uxto []*Utxo, fee int64) []*Utxo {
 //使用utxo 构建 交易
 func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, error) {
 	trans := &Transaction{
-		Timestamp: p.chain.Env.UnixTime(),
+		Timestamp: p.Chain.Env.UnixTime(),
 		Type:      NormalTx,
 		Extra:     []byte(tx.Extra),
 	}
@@ -136,7 +136,7 @@ func (p *TxPool) createNormalTx(used []*Utxo, tx *TxRequest) (*Transaction, erro
 	inputs := make([]*Input, 0)
 	var total int64 = 0
 	for _, it := range used {
-		if inTx, exist := p.chain.Tx[it.TxHash]; !exist {
+		if inTx, exist := p.Chain.Tx[it.TxHash]; !exist {
 			return nil, ErrWrapf("Transaction %s not found !", it.TxHash)
 		} else {
 			i := len(inTx.Outputs)

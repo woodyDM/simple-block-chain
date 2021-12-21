@@ -135,3 +135,7 @@ func (a *Wallet) Transform(p *TxPool, address string, fee int64, extra string) *
 	Log.Info("Wallet submit transform from ", a.Address(), " to ", address, " with fee ", fee, " and extra", extra)
 	return p.Transform(&req)
 }
+
+func GetTestWallet(i int) *Wallet {
+	return RestoreWallet(GenesisPrivateKeys[i])
+}

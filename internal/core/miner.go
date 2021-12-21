@@ -41,7 +41,7 @@ func (m *Miner) handleNewTransaction(tx *Transaction) {
 	m.tx = make([]*Transaction, 0)
 	//to create coinbase tx and bonus
 	txAll := m.createNewBlockTx(toTx)
-	newBlock, err := m.p.chain.NewBlock(txAll)
+	newBlock, err := m.p.Chain.NewBlock(txAll)
 	if err != nil {
 		Log.Info("Error when create new block!", err)
 		return
@@ -55,9 +55,9 @@ func (m *Miner) handleNewTransaction(tx *Transaction) {
 	}
 	newBlock.UpdateHash(hash)
 	Log.Info("============ >>  New  block [", newBlock.Height, "] with hash "+newBlock.Hash+" << ==========")
-	err = m.p.chain.Append(newBlock)
+	err = m.p.Chain.Append(newBlock)
 	if err != nil {
-		Log.Error("Error when append to chain ", err)
+		Log.Error("Error when append to Chain ", err)
 		return
 	}
 	m.p.txBlockCh <- newBlock
@@ -66,7 +66,7 @@ func (m *Miner) handleNewTransaction(tx *Transaction) {
 
 func (m *Miner) createNewBlockTx(tx []*Transaction) []*Transaction {
 	coinbase := &Transaction{
-		Timestamp: m.p.chain.Env.UnixTime(),
+		Timestamp: m.p.Chain.Env.UnixTime(),
 		Type:      NormalTx,
 		Inputs:    make([]*Input, 0),
 		Outputs: []*Output{

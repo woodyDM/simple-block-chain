@@ -1,40 +1,27 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/woodyDM/gframe/public/gf"
+	"github.com/woodyDM/simple-block-chain/internal/core"
+	"math/rand"
+	"time"
 )
 
-var profile = flag.String("p", "", "set profile name.")
-
 func main() {
-	flag.Parse()
-	gf.InitConfig(*profile)
-	bindPort := fmt.Sprintf(":%d", gf.Conf.Port)
+	pool := core.NewTxPool(core.Genesis(core.Env))
+	core.NewMiner(pool, core.GetTestWallet(9))
+	rd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	tick := time.Tick(1 * time.Second)
+	for {
+		w1 := core.GetTestWallet(rd.Intn(9))
+		w2 := core.GetTestWallet(rd.Intn(9))
+		fee := int64(rd.Intn(3)) + 1
+		if w1.Address() == w2.Address() {
+			continue
+		}
+		select {
+		case <-tick:
+			w1.Transform(pool, w2.Address(), fee, time.Now().String())
+		}
 
-	app, err := gf.CreateMyServer(bindPort)
-	if err != nil {
-		panic(err)
 	}
-	rg := app.Engine.Group("/api")
-	registerRouters(rg)
-	gf.Log.Printf("Starting server at port [%s]", bindPort)
-	app.Start()
-	app.Await()
-}
-
-/**
-to register routers here
-*/
-func registerRouters(r *gin.RouterGroup) {
-
-	r.Use(gf.DefaultCookieHandler)
-	r.Use(gf.DefaultUserAgentWhiteListHandler)
-
-	r.GET("/header", gf.Route(func(ctx *gin.Context) (interface{}, error) {
-		return ctx.HandlerNames(), nil
-	}))
-
 }
